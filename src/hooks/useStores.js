@@ -6,35 +6,36 @@ export function useStores(onlyActive = true) {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = async () => {
-    setLoading(true);
-    let q = supabase.from('stores').select('*').order('nome');
-    if (onlyActive) q = q.eq('attivo', true);
-    const { data, error } = await q;
-    if (!error) setStores(data || []);
-    setLoading(false);
-  };
+  useEffect(() => {
+    async function fetchStores() {
+      setLoading(true);
+      let q = supabase.from('stores').select('*').order('nome');
+      if (onlyActive) q = q.eq('attivo', true);
+      const { data, error } = await q;
+      if (!error) setStores(data || []);
+      setLoading(false);
+    }
+    fetchStores();
+  }, [onlyActive]);
 
-  useEffect(() => { fetch(); }, [onlyActive]);
-
-  return { stores, loading, refetch: fetch };
+  return { stores, loading };
 }
 
-// src/hooks/useActivities.js (inline per comodità)
 export function useActivities(onlyActive = true) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = async () => {
-    setLoading(true);
-    let q = supabase.from('activities').select('*').order('titolo');
-    if (onlyActive) q = q.eq('attiva', true);
-    const { data, error } = await q;
-    if (!error) setActivities(data || []);
-    setLoading(false);
-  };
+  useEffect(() => {
+    async function fetchActivities() {
+      setLoading(true);
+      let q = supabase.from('activities').select('*').order('titolo');
+      if (onlyActive) q = q.eq('attiva', true);
+      const { data, error } = await q;
+      if (!error) setActivities(data || []);
+      setLoading(false);
+    }
+    fetchActivities();
+  }, [onlyActive]);
 
-  useEffect(() => { fetch(); }, [onlyActive]);
-
-  return { activities, loading, refetch: fetch };
+  return { activities, loading };
 }
