@@ -1,5 +1,5 @@
 // src/App.js
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import NewVisitPage from './pages/NewVisitPage';
