@@ -14,13 +14,15 @@ const PERIOD_OPTIONS = [
   { label: 'Tutto', days: null },
 ];
 
+const EMPTY_STATS = { totalVisits: 0, storeData: [], totalActs: 0, completedActs: 0, completionRate: 0 };
+
 export default function DashboardPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [period, setPeriod] = useState(30);
   const [filterUser, setFilterUser] = useState('');
   const [allUsers, setAllUsers] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(EMPTY_STATS);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isAdmin || authLoading) return;
@@ -38,7 +40,6 @@ export default function DashboardPage() {
         since = since.toISOString();
       }
 
-      // Query visite con store (senza join profiles)
       let visitQuery = supabase
         .from('visits')
         .select('id, store_id, start_time, end_time, stores(nome)')
@@ -52,7 +53,6 @@ export default function DashboardPage() {
       const { data: visits, error: visitErr } = await visitQuery;
       if (visitErr) throw visitErr;
 
-      // Calcola stats per store
       const storeMap = {};
       (visits || []).forEach(v => {
         const name = v.stores?.nome || 'Sconosciuto';
@@ -64,29 +64,16 @@ export default function DashboardPage() {
         .sort((a, b) => b.visite - a.visite)
         .slice(0, 10);
 
-      // Query attività (senza join profiles)
-      let actQuery = supabase
-        .from('visit_activities')
-        .select('completed, visit_id');
-
-      if (!isAdmin || filterUser) {
-        // Filtra per le visite dell'utente
-        const visitIds = (visits || []).map(v => v.id);
-        if (visitIds.length === 0) {
-          setStats({ totalVisits: 0, storeData: [], totalActs: 0, completedActs: 0, completionRate: 0 });
-          setLoading(false);
-          return;
-        }
-        actQuery = actQuery.in('visit_id', visitIds);
-      } else if (since) {
-        // Per admin senza filtro utente, filtra per data tramite subquery
-        const visitIds = (visits || []).map(v => v.id);
-        if (visitIds.length > 0) {
-          actQuery = actQuery.in('visit_id', visitIds);
-        }
+      const visitIds = (visits || []).map(v => v.id);
+      if (visitIds.length === 0) {
+        setStats(EMPTY_STATS);
+        return;
       }
 
-      const { data: acts } = await actQuery;
+      const { data: acts } = await supabase
+        .from('visit_activities')
+        .select('completed, visit_id')
+        .in('visit_id', visitIds);
 
       const totalActs = acts?.length || 0;
       const completedActs = acts?.filter(a => a.completed).length || 0;
@@ -100,7 +87,7 @@ export default function DashboardPage() {
       });
     } catch (err) {
       console.error('Errore dashboard:', err);
-      setStats({ totalVisits: 0, storeData: [], totalActs: 0, completedActs: 0, completionRate: 0 });
+      setStats(EMPTY_STATS);
     } finally {
       setLoading(false);
     }
@@ -112,7 +99,6 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      {/* Filtri */}
       <div className="flex gap-2 items-center flex-wrap">
         {PERIOD_OPTIONS.map(opt => (
           <button
@@ -142,7 +128,6 @@ export default function DashboardPage() {
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       ) : (
         <>
-          {/* KPI Cards */}
           <div className="grid grid-cols-2 gap-3">
             <KPICard label="Visite totali" value={stats.totalVisits} icon="🏪" color="blue" />
             <KPICard
@@ -155,18 +140,14 @@ export default function DashboardPage() {
             <KPICard label="Non completate" value={stats.totalActs - stats.completedActs} icon="⬜" color="gray" />
           </div>
 
-          {/* Grafico */}
           {stats.storeData.length > 0 ? (
             <div className="card">
               <p className="section-title">Visite per store</p>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={stats.storeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fill: '#64748b' }}
-                    tickFormatter={v => v.length > 10 ? v.slice(0, 10) + '…' : v}
-                  />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }}
+                    tickFormatter={v => v.length > 10 ? v.slice(0, 10) + '…' : v} />
                   <YAxis tick={{ fontSize: 10, fill: '#64748b' }} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
@@ -188,7 +169,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Barra completamento */}
           {stats.totalActs > 0 && (
             <div className="card">
               <div className="flex justify-between items-center mb-2">
@@ -196,10 +176,8 @@ export default function DashboardPage() {
                 <span className="font-bold text-blue-700">{stats.completionRate}%</span>
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-700"
-                  style={{ width: `${stats.completionRate}%` }}
-                />
+                <div className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                  style={{ width: `${stats.completionRate}%` }} />
               </div>
               <div className="flex justify-between text-xs text-slate-400 mt-1.5">
                 <span>{stats.completedActs} completate</span>
