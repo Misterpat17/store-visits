@@ -10,16 +10,6 @@ import BottomNav from './components/shared/BottomNav';
 import Spinner from './components/shared/Spinner';
 import './index.css';
 
-// Registra service worker PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then(() => console.log('SW registrato'))
-      .catch((err) => console.log('SW errore:', err));
-  });
-}
-
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('nuova-visita');
