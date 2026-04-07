@@ -3,17 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 
 const tabs = [
   {
-    id: 'home',
-    label: 'Home',
-    icon: (active) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-        <polyline points="9,22 9,12 15,12 15,22"/>
-      </svg>
-    ),
-  },
-  {
     id: 'nuova-visita',
     label: 'Visita',
     icon: (active) => (
@@ -35,8 +24,19 @@ const tabs = [
     ),
   },
   {
+    id: 'store-stats',
+    label: 'Store',
+    icon: (active) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        <polyline points="9,22 9,12 15,12 15,22"/>
+      </svg>
+    ),
+  },
+  {
     id: 'dashboard',
-    label: 'Report',
+    label: 'Dashboard',
     icon: (active) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
@@ -78,13 +78,13 @@ export default function BottomNav({ activeTab, setActiveTab }) {
                 transition-colors min-h-[56px] relative
                 ${active ? 'text-blue-700' : 'text-slate-400 active:text-slate-600'}`}
             >
-              {active && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-700 rounded-b-full" />
-              )}
               {tab.icon(active)}
               <span className={`text-[10px] font-semibold ${active ? 'text-blue-700' : 'text-slate-400'}`}>
                 {tab.label}
               </span>
+              {active && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-700 rounded-t" />
+              )}
             </button>
           );
         })}
