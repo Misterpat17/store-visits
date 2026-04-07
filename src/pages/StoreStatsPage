@@ -1,9 +1,14 @@
 // src/pages/StoreStatsPage.js
-// Sezione statistiche per store — quante visite e da chi
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
+
+const PERIOD_OPTIONS = [
+  { label: '7 giorni', days: 7 },
+  { label: '30 giorni', days: 30 },
+  { label: 'Tutto', days: null },
+];
 
 export default function StoreStatsPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -23,49 +28,54 @@ export default function StoreStatsPage() {
         since = since.toISOString();
       }
 
-      let q = supabase
+      // Query visite con store
+      let visitQuery = supabase
         .from('visits')
-        .select('id, store_id, user_id, start_time, end_time, stores(nome, area), profiles(nome)')
+        .select('id, store_id, user_id, start_time, stores(nome, area)')
         .is('deleted_at', null)
         .not('end_time', 'is', null);
 
-      if (!isAdmin) q = q.eq('user_id', user.id);
-      if (since) q = q.gte('start_time', since);
+      if (!isAdmin) visitQuery = visitQuery.eq('user_id', user.id);
+      if (since) visitQuery = visitQuery.gte('start_time', since);
 
-      const { data: visits, error } = await q.order('start_time', { ascending: false });
-      if (error) throw error;
+      const { data: visits, error: visitErr } = await visitQuery;
+      if (visitErr) throw visitErr;
+
+      if (!visits || visits.length === 0) {
+        setStats([]);
+        setLoading(false);
+        return;
+      }
+
+      // Recupera tutti i profili utente necessari
+      const userIds = [...new Set(visits.map(v => v.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, nome')
+        .in('id', userIds);
+
+      const profileMap = {};
+      (profiles || []).forEach(p => { profileMap[p.id] = p.nome; });
 
       // Raggruppa per store
       const storeMap = {};
-      (visits || []).forEach(v => {
+      visits.forEach(v => {
         const storeId = v.store_id;
         const storeName = v.stores?.nome || 'Sconosciuto';
         const storeArea = v.stores?.area || '';
-        const userName = v.profiles?.nome || 'Sconosciuto';
+        const userName = profileMap[v.user_id] || 'Sconosciuto';
 
         if (!storeMap[storeId]) {
-          storeMap[storeId] = {
-            storeId,
-            storeName,
-            storeArea,
-            totalVisits: 0,
-            users: {},
-          };
+          storeMap[storeId] = { storeId, storeName, storeArea, totalVisits: 0, users: {} };
         }
         storeMap[storeId].totalVisits++;
-        if (!storeMap[storeId].users[userName]) {
-          storeMap[storeId].users[userName] = 0;
-        }
-        storeMap[storeId].users[userName]++;
+        storeMap[storeId].users[userName] = (storeMap[storeId].users[userName] || 0) + 1;
       });
 
-      // Converti in array e ordina per numero visite
-      const result = Object.values(storeMap)
-        .sort((a, b) => b.totalVisits - a.totalVisits);
-
-      setStats(result);
+      setStats(Object.values(storeMap).sort((a, b) => b.totalVisits - a.totalVisits));
     } catch (err) {
       console.error('Errore stats store:', err);
+      setStats([]);
     } finally {
       setLoading(false);
     }
@@ -78,12 +88,6 @@ export default function StoreStatsPage() {
   if (authLoading) {
     return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
   }
-
-  const PERIOD_OPTIONS = [
-    { label: '7 giorni', days: 7 },
-    { label: '30 giorni', days: 30 },
-    { label: 'Tutto', days: null },
-  ];
 
   return (
     <div className="flex flex-col">
@@ -113,26 +117,20 @@ export default function StoreStatsPage() {
         </div>
       ) : (
         <div className="p-4 flex flex-col gap-3">
-          <p className="section-title">{stats.length} store visitati</p>
+          <p className="section-title">{stats.length} store visitati · {stats.reduce((s, x) => s + x.totalVisits, 0)} visite totali</p>
           {stats.map(s => (
             <div key={s.storeId} className="card p-0 overflow-hidden">
-              {/* Riga store */}
               <button
                 className="w-full flex items-center px-4 py-3.5 gap-3 active:bg-slate-50"
                 onClick={() => setExpanded(expanded === s.storeId ? null : s.storeId)}
               >
-                {/* Badge numero visite */}
                 <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                   <span className="font-bold text-blue-700 text-sm">{s.totalVisits}</span>
                 </div>
-
                 <div className="flex-1 min-w-0 text-left">
                   <p className="font-semibold text-slate-800 text-sm truncate">{s.storeName}</p>
-                  {s.storeArea && (
-                    <p className="text-xs text-slate-400">{s.storeArea}</p>
-                  )}
+                  {s.storeArea && <p className="text-xs text-slate-400">{s.storeArea}</p>}
                 </div>
-
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="badge-gray text-[10px]">
                     {Object.keys(s.users).length} {Object.keys(s.users).length === 1 ? 'utente' : 'utenti'}
@@ -144,19 +142,18 @@ export default function StoreStatsPage() {
                 </div>
               </button>
 
-              {/* Dettaglio utenti */}
               {expanded === s.storeId && (
                 <div className="border-t border-slate-100 divide-y divide-slate-50">
                   {Object.entries(s.users)
                     .sort(([, a], [, b]) => b - a)
-                    .map(([userName, count]) => (
-                      <div key={userName} className="flex items-center px-4 py-2.5 gap-3 bg-slate-50">
+                    .map(([uName, count]) => (
+                      <div key={uName} className="flex items-center px-4 py-2.5 gap-3 bg-slate-50">
                         <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
                           <span className="text-xs font-bold text-blue-700">
-                            {userName.charAt(0).toUpperCase()}
+                            {uName.charAt(0).toUpperCase()}
                           </span>
                         </div>
-                        <span className="text-sm text-slate-700 flex-1">{userName}</span>
+                        <span className="text-sm text-slate-700 flex-1">{uName}</span>
                         <span className="font-semibold text-slate-600 text-sm">
                           {count} {count === 1 ? 'visita' : 'visite'}
                         </span>
