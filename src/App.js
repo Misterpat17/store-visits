@@ -2,18 +2,18 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
-import HomePage from './pages/HomePage';
 import NewVisitPage from './pages/NewVisitPage';
 import HistoryPage from './pages/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
+import StoreStatsPage from './pages/StoreStatsPage';
 import BottomNav from './components/shared/BottomNav';
 import Spinner from './components/shared/Spinner';
 import './index.css';
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('nuova-visita');
   const [tabKey, setTabKey] = useState(0);
 
   const handleTabChange = (tab) => {
@@ -31,23 +31,23 @@ function AppContent() {
 
   if (!user) return <LoginPage />;
 
-  const pageLabels = {
-    'home': 'Home',
-    'nuova-visita': 'Nuova Visita',
-    'storico': 'Storico',
-    'dashboard': 'Dashboard',
-    'admin': 'Amministrazione',
-  };
-
   const renderPage = () => {
     switch (activeTab) {
-      case 'home': return <HomePage key={tabKey} setActiveTab={handleTabChange} />;
       case 'nuova-visita': return <NewVisitPage key={tabKey} />;
       case 'storico': return <HistoryPage key={tabKey} />;
+      case 'store-stats': return <StoreStatsPage key={tabKey} />;
       case 'dashboard': return <DashboardPage key={tabKey} />;
       case 'admin': return <AdminPage key={tabKey} />;
-      default: return <HomePage key={tabKey} setActiveTab={handleTabChange} />;
+      default: return <NewVisitPage key={tabKey} />;
     }
+  };
+
+  const tabLabels = {
+    'nuova-visita': 'Nuova Visita',
+    'storico': 'Storico',
+    'store-stats': 'Store',
+    'dashboard': 'Dashboard',
+    'admin': 'Amministrazione',
   };
 
   return (
@@ -66,7 +66,7 @@ function AppContent() {
             </div>
             <span className="font-semibold text-sm">Store Visit Manager</span>
           </div>
-          <span className="text-white/70 text-xs">{pageLabels[activeTab] || ''}</span>
+          <span className="text-white/70 text-xs">{tabLabels[activeTab]}</span>
         </div>
       </header>
 
