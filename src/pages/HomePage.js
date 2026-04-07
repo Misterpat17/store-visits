@@ -8,7 +8,7 @@ export default function HomePage({ onNavigate }) {
   const { user, profile, isAdmin, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [recentVisits, setRecentVisits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const hiddenAtRef = useRef(null);
 
   const loadData = useCallback(async (showSpinner = true) => {
