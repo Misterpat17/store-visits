@@ -1,5 +1,5 @@
 // src/App.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
@@ -14,16 +14,18 @@ import './index.css';
 
 function AppContent() {
   const { user, loading } = useAuth();
-const [activeTab, setActiveTab] = useState('home');
-const [tabKey, setTabKey] = useState(0);
+  const [activeTab, setActiveTab] = useState('home');
+  const [tabKey, setTabKey] = useState(0);
+  const prevUserRef = useRef(null);
 
-// Reset alla home ad ogni nuovo login
-useEffect(() => {
-  if (user) {
-    setActiveTab('home');
-    setTabKey(prev => prev + 1);
-  }
-}, [user]);
+  // Reset alla home solo quando l'utente fa login (da null a utente)
+  useEffect(() => {
+    if (user && !prevUserRef.current) {
+      setActiveTab('home');
+      setTabKey(prev => prev + 1);
+    }
+    prevUserRef.current = user;
+  }, [user]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
