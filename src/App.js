@@ -27,6 +27,17 @@ function AppContent() {
     prevUserRef.current = user;
   }, [user]);
 
+  // Ricarica il tab attivo quando l'app torna in primo piano
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setTabKey(prev => prev + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setTabKey(prev => prev + 1);
@@ -77,7 +88,7 @@ function AppContent() {
                 <polyline points="9,22 9,12 15,12 15,22"/>
               </svg>
             </div>
-            <span className="font-semibold text-sm">Store Visit Manager</span>
+            <span className="font-semibold text-sm">Bruno Store Check</span>
           </div>
           <span className="text-white/70 text-xs">{tabLabels[activeTab]}</span>
         </div>
