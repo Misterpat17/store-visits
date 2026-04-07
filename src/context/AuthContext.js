@@ -6,47 +6,62 @@ const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null); // { id, nome, ruolo }
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Carica profilo custom dall'utente autenticato
   async function fetchProfile(authUser) {
     if (!authUser) return null;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .single();
-    if (error) { console.error('Errore profilo:', error); return null; }
-    return data;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Errore profilo:', err);
+      return null;
+    }
   }
 
   useEffect(() => {
-    // Controlla sessione esistente
+    let mounted = true;
+
+    // Carica sessione esistente
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      if (!mounted) return;
       if (session?.user) {
+        setUser(session.user);
         const p = await fetchProfile(session.user);
-        setProfile(p);
+        if (mounted) setProfile(p);
+      } else {
+        setUser(null);
+        setProfile(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
     // Ascolta cambi di sessione
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
+      async (event, session) => {
+        if (!mounted) return;
         if (session?.user) {
+          setUser(session.user);
           const p = await fetchProfile(session.user);
-          setProfile(p);
+          if (mounted) setProfile(p);
         } else {
+          setUser(null);
           setProfile(null);
         }
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email, password) => {
