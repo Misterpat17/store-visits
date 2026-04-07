@@ -23,28 +23,35 @@ export default function HistoryPage() {
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
-    let q = supabase
-      .from('visits')
-      .select('*, stores(nome, sede, area), profiles(nome)')
-      .order('start_time', { ascending: false });
+    try {
+      let q = supabase
+        .from('visits')
+        .select('*, stores(nome, sede, area), profiles(nome)')
+        .order('start_time', { ascending: false });
 
-    // Filtra per cestino o visite normali
-    if (activeTab === 'cestino') {
-      q = q.not('deleted_at', 'is', null);
-    } else {
-      q = q.is('deleted_at', null);
+      // Filtra cestino o visite normali
+      if (activeTab === 'cestino') {
+        q = q.not('deleted_at', 'is', null);
+      } else {
+        q = q.is('deleted_at', null);
+      }
+
+      if (!isAdmin) {
+        q = q.eq('user_id', user.id);
+      } else {
+        if (filterUser) q = q.eq('user_id', filterUser);
+        if (filterStore) q = q.eq('store_id', filterStore);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      setVisits(data || []);
+    } catch (err) {
+      console.error('Errore caricamento visite:', err);
+      setVisits([]);
+    } finally {
+      setLoading(false);
     }
-
-    if (!isAdmin) {
-      q = q.eq('user_id', user.id);
-    } else {
-      if (filterUser) q = q.eq('user_id', filterUser);
-      if (filterStore) q = q.eq('store_id', filterStore);
-    }
-
-    const { data, error } = await q;
-    if (!error) setVisits(data || []);
-    setLoading(false);
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
   useEffect(() => { fetchVisits(); }, [fetchVisits]);
@@ -55,22 +62,19 @@ export default function HistoryPage() {
     supabase.from('stores').select('id, nome').eq('attivo', true).then(({ data }) => setAllStores(data || []));
   }, [isAdmin]);
 
-  // Sposta nel cestino
   const softDelete = async (visitId) => {
     if (!window.confirm('Spostare questa visita nel cestino?')) return;
     await supabase.from('visits').update({ deleted_at: new Date().toISOString() }).eq('id', visitId);
     fetchVisits();
   };
 
-  // Ripristina dal cestino
   const restore = async (visitId) => {
     await supabase.from('visits').update({ deleted_at: null }).eq('id', visitId);
     fetchVisits();
   };
 
-  // Elimina definitivamente
   const hardDelete = async (visitId) => {
-    if (!window.confirm('Eliminare definitivamente questa visita? L\'operazione non è reversibile.')) return;
+    if (!window.confirm('Eliminare definitivamente? Operazione non reversibile.')) return;
     await supabase.from('visits').delete().eq('id', visitId);
     fetchVisits();
   };
@@ -98,7 +102,7 @@ export default function HistoryPage() {
               onClick={() => setActiveTab(t.id)}
               className={`flex-1 py-3 text-sm font-semibold transition-colors
                 ${activeTab === t.id
-                  ? 'text-primary-700 border-b-2 border-primary-700 bg-white'
+                  ? 'text-blue-700 border-b-2 border-blue-700 bg-white'
                   : 'text-slate-500'}`}
             >
               {t.label}
@@ -112,11 +116,13 @@ export default function HistoryPage() {
         <div className="p-4 bg-white border-b border-slate-100 flex flex-col gap-2">
           <p className="section-title">Filtra visite</p>
           <div className="flex gap-2">
-            <select className="input-field text-sm flex-1" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+            <select className="input-field text-sm flex-1" value={filterUser}
+              onChange={e => setFilterUser(e.target.value)}>
               <option value="">Tutti gli utenti</option>
               {allUsers.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
             </select>
-            <select className="input-field text-sm flex-1" value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+            <select className="input-field text-sm flex-1" value={filterStore}
+              onChange={e => setFilterStore(e.target.value)}>
               <option value="">Tutti gli store</option>
               {allStores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
@@ -138,20 +144,23 @@ export default function HistoryPage() {
             {activeTab === 'cestino' ? 'Il cestino è vuoto' : 'Nessuna visita trovata'}
           </p>
           <p className="text-sm text-slate-400">
-            {activeTab === 'cestino' ? 'Le visite eliminate appariranno qui.' : 'Le visite completate appariranno qui.'}
+            {activeTab === 'cestino'
+              ? 'Le visite eliminate appariranno qui.'
+              : 'Le visite completate appariranno qui.'}
           </p>
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
           {visits.map(v => (
-            <div key={v.id} className="flex items-center px-4 py-3.5 gap-3 bg-white">
+            <div key={v.id} className="flex items-center px-4 py-3.5 gap-3 bg-white active:bg-slate-50">
               {/* Icona stato */}
               <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
                 ${activeTab === 'cestino' ? 'bg-red-100' : v.end_time ? 'bg-emerald-100' : 'bg-amber-100'}`}>
                 {activeTab === 'cestino' ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
-                    <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
-                    <path d="M10,11v6m4-6v6"/><path d="M9,6V4h6v2"/>
+                    <polyline points="3,6 5,6 21,6"/>
+                    <path d="M19,6l-1,14H6L5,6"/>
+                    <path d="M9,6V4h6v2"/>
                   </svg>
                 ) : v.end_time ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2">
@@ -159,20 +168,21 @@ export default function HistoryPage() {
                   </svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
                     <line x1="12" y1="16" x2="12.01" y2="16"/>
                   </svg>
                 )}
               </div>
 
-              {/* Contenuto — cliccabile per dettaglio (solo tab visite) */}
-              <div
-                className="flex-1 min-w-0"
-                onClick={() => activeTab === 'visite' && setSelectedVisit(v)}
-              >
+              {/* Contenuto */}
+              <div className="flex-1 min-w-0 cursor-pointer"
+                onClick={() => activeTab === 'visite' && setSelectedVisit(v)}>
                 <div className="flex items-baseline gap-2">
                   <p className="font-semibold text-slate-800 text-sm truncate">{v.stores?.nome}</p>
-                  {v.stores?.area && <span className="text-xs text-slate-400 truncate">{v.stores.area}</span>}
+                  {v.stores?.area && (
+                    <span className="text-xs text-slate-400 truncate">{v.stores.area}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-xs text-slate-500">{formatDate(v.start_time)}</span>
@@ -185,13 +195,13 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              {/* Azioni */}
+              {/* Azioni admin */}
               {isAdmin && (
                 <div className="flex gap-1 flex-shrink-0">
                   {activeTab === 'visite' ? (
                     <>
                       <button onClick={() => setSelectedVisit(v)}
-                        className="p-2 text-slate-400 active:text-primary-600">
+                        className="p-2 text-slate-400 active:text-blue-600">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                           <circle cx="12" cy="12" r="3"/>
@@ -200,7 +210,8 @@ export default function HistoryPage() {
                       <button onClick={() => softDelete(v.id)}
                         className="p-2 text-slate-400 active:text-red-500">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
+                          <polyline points="3,6 5,6 21,6"/>
+                          <path d="M19,6l-1,14H6L5,6"/>
                           <path d="M9,6V4h6v2"/>
                         </svg>
                       </button>
@@ -217,8 +228,10 @@ export default function HistoryPage() {
                       <button onClick={() => hardDelete(v.id)}
                         className="p-2 text-red-400 active:text-red-600" title="Elimina definitivamente">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
-                          <path d="M10,11v6m4-6v6"/><path d="M9,6V4h6v2"/>
+                          <polyline points="3,6 5,6 21,6"/>
+                          <path d="M19,6l-1,14H6L5,6"/>
+                          <path d="M10,11v6m4-6v6"/>
+                          <path d="M9,6V4h6v2"/>
                         </svg>
                       </button>
                     </>
