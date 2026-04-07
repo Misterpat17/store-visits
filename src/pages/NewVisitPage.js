@@ -1,5 +1,5 @@
 // src/pages/NewVisitPage.js
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase, uploadAttachment } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useStores, useActivities } from '../hooks/useStores';
