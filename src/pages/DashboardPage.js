@@ -15,7 +15,7 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function DashboardPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [period, setPeriod] = useState(30);
   const [filterUser, setFilterUser] = useState('');
   const [allUsers, setAllUsers] = useState([]);
@@ -23,15 +23,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isAdmin) {
-      supabase.from('profiles').select('id, nome').then(({ data }) => setAllUsers(data || []));
-    }
-  }, [isAdmin]);
+    if (!isAdmin || authLoading) return;
+    supabase.from('profiles').select('id, nome').then(({ data }) => setAllUsers(data || []));
+  }, [isAdmin, authLoading]);
 
   const fetchStats = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      // Calcola data di inizio periodo
       let since = null;
       if (period) {
         since = new Date();
@@ -39,39 +38,53 @@ export default function DashboardPage() {
         since = since.toISOString();
       }
 
-      // Query base visite
+      // Query visite con store (senza join profiles)
       let visitQuery = supabase
         .from('visits')
-        .select('id, store_id, start_time, end_time, stores(nome), user_id, profiles(nome)')
-        .not('end_time', 'is', null); // solo visite chiuse
+        .select('id, store_id, start_time, end_time, stores(nome)')
+        .is('deleted_at', null)
+        .not('end_time', 'is', null);
 
       if (!isAdmin) visitQuery = visitQuery.eq('user_id', user.id);
       else if (filterUser) visitQuery = visitQuery.eq('user_id', filterUser);
       if (since) visitQuery = visitQuery.gte('start_time', since);
 
-      const { data: visits } = await visitQuery.order('start_time', { ascending: false });
+      const { data: visits, error: visitErr } = await visitQuery;
+      if (visitErr) throw visitErr;
 
       // Calcola stats per store
       const storeMap = {};
       (visits || []).forEach(v => {
         const name = v.stores?.nome || 'Sconosciuto';
-        if (!storeMap[name]) storeMap[name] = 0;
-        storeMap[name]++;
+        storeMap[name] = (storeMap[name] || 0) + 1;
       });
 
       const storeData = Object.entries(storeMap)
-        .map(([name, count]) => ({ name, visite: count }))
+        .map(([name, visite]) => ({ name, visite }))
         .sort((a, b) => b.visite - a.visite)
-        .slice(0, 10); // top 10
+        .slice(0, 10);
 
-      // Query attività
+      // Query attività (senza join profiles)
       let actQuery = supabase
         .from('visit_activities')
-        .select('completed, visits!inner(user_id, start_time)');
+        .select('completed, visit_id');
 
-      if (!isAdmin) actQuery = actQuery.eq('visits.user_id', user.id);
-      else if (filterUser) actQuery = actQuery.eq('visits.user_id', filterUser);
-      if (since) actQuery = actQuery.gte('visits.start_time', since);
+      if (!isAdmin || filterUser) {
+        // Filtra per le visite dell'utente
+        const visitIds = (visits || []).map(v => v.id);
+        if (visitIds.length === 0) {
+          setStats({ totalVisits: 0, storeData: [], totalActs: 0, completedActs: 0, completionRate: 0 });
+          setLoading(false);
+          return;
+        }
+        actQuery = actQuery.in('visit_id', visitIds);
+      } else if (since) {
+        // Per admin senza filtro utente, filtra per data tramite subquery
+        const visitIds = (visits || []).map(v => v.id);
+        if (visitIds.length > 0) {
+          actQuery = actQuery.in('visit_id', visitIds);
+        }
+      }
 
       const { data: acts } = await actQuery;
 
@@ -86,13 +99,16 @@ export default function DashboardPage() {
         completionRate: totalActs > 0 ? Math.round((completedActs / totalActs) * 100) : 0,
       });
     } catch (err) {
-      console.error(err);
+      console.error('Errore dashboard:', err);
+      setStats({ totalVisits: 0, storeData: [], totalActs: 0, completedActs: 0, completionRate: 0 });
     } finally {
       setLoading(false);
     }
   }, [user, isAdmin, period, filterUser]);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => {
+    if (!authLoading && user) fetchStats();
+  }, [authLoading, user, fetchStats]);
 
   return (
     <div className="p-4 flex flex-col gap-4">
@@ -104,7 +120,7 @@ export default function DashboardPage() {
             onClick={() => setPeriod(opt.days)}
             className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors
               ${period === opt.days
-                ? 'bg-primary-700 text-white'
+                ? 'bg-blue-700 text-white'
                 : 'bg-white text-slate-600 border border-slate-200'}`}
           >
             {opt.label}
@@ -128,33 +144,18 @@ export default function DashboardPage() {
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 gap-3">
+            <KPICard label="Visite totali" value={stats.totalVisits} icon="🏪" color="blue" />
             <KPICard
-              label="Visite totali"
-              value={stats.totalVisits}
-              icon="🏪"
-              color="blue"
-            />
-            <KPICard
-              label="Tasso completamento"
+              label="Completamento"
               value={`${stats.completionRate}%`}
               icon="✅"
               color={stats.completionRate >= 80 ? 'green' : stats.completionRate >= 50 ? 'amber' : 'red'}
             />
-            <KPICard
-              label="Attività OK"
-              value={stats.completedActs}
-              icon="☑️"
-              color="green"
-            />
-            <KPICard
-              label="Attività saltate"
-              value={stats.totalActs - stats.completedActs}
-              icon="⬜"
-              color="gray"
-            />
+            <KPICard label="Attività OK" value={stats.completedActs} icon="☑️" color="green" />
+            <KPICard label="Non completate" value={stats.totalActs - stats.completedActs} icon="⬜" color="gray" />
           </div>
 
-          {/* Grafico visite per store */}
+          {/* Grafico */}
           {stats.storeData.length > 0 ? (
             <div className="card">
               <p className="section-title">Visite per store</p>
@@ -164,7 +165,7 @@ export default function DashboardPage() {
                   <XAxis
                     dataKey="name"
                     tick={{ fontSize: 10, fill: '#64748b' }}
-                    tickFormatter={v => v.length > 12 ? v.slice(0, 12) + '…' : v}
+                    tickFormatter={v => v.length > 10 ? v.slice(0, 10) + '…' : v}
                   />
                   <YAxis tick={{ fontSize: 10, fill: '#64748b' }} allowDecimals={false} />
                   <Tooltip
@@ -187,12 +188,12 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Barra completamento attività */}
+          {/* Barra completamento */}
           {stats.totalActs > 0 && (
             <div className="card">
               <div className="flex justify-between items-center mb-2">
                 <p className="section-title mb-0">Completamento attività</p>
-                <span className="font-bold text-primary-700">{stats.completionRate}%</span>
+                <span className="font-bold text-blue-700">{stats.completionRate}%</span>
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                 <div
