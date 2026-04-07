@@ -13,7 +13,7 @@ const PERIOD_OPTIONS = [
 export default function StoreStatsPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [stats, setStats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [period, setPeriod] = useState(30);
 
@@ -28,7 +28,6 @@ export default function StoreStatsPage() {
         since = since.toISOString();
       }
 
-      // Query visite con store
       let visitQuery = supabase
         .from('visits')
         .select('id, store_id, user_id, start_time, stores(nome, area)')
@@ -43,11 +42,9 @@ export default function StoreStatsPage() {
 
       if (!visits || visits.length === 0) {
         setStats([]);
-        setLoading(false);
         return;
       }
 
-      // Recupera tutti i profili utente necessari
       const userIds = [...new Set(visits.map(v => v.user_id))];
       const { data: profiles } = await supabase
         .from('profiles')
@@ -57,7 +54,6 @@ export default function StoreStatsPage() {
       const profileMap = {};
       (profiles || []).forEach(p => { profileMap[p.id] = p.nome; });
 
-      // Raggruppa per store
       const storeMap = {};
       visits.forEach(v => {
         const storeId = v.store_id;
@@ -85,13 +81,8 @@ export default function StoreStatsPage() {
     if (!authLoading && user) fetchStats();
   }, [authLoading, user, fetchStats]);
 
-  if (authLoading) {
-    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
-  }
-
   return (
     <div className="flex flex-col">
-      {/* Filtro periodo */}
       <div className="p-4 bg-white border-b border-slate-100 flex gap-2 flex-wrap">
         {PERIOD_OPTIONS.map(opt => (
           <button
