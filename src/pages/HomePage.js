@@ -2,35 +2,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import Spinner from '../components/shared/Spinner';
 
 export default function HomePage({ onNavigate }) {
   const { user, profile, isAdmin, logout } = useAuth();
   const [stats, setStats] = useState({ totalVisite: 0, storeVisitati: 0, visteCompletate: 0 });
   const [recentVisits, setRecentVisits] = useState([]);
-  const [loading, setLoading] = useState(false);
   const hiddenAtRef = useRef(null);
 
-  const loadData = useCallback(async (showSpinner = true) => {
+  const loadData = useCallback(async () => {
     if (!user) return;
-    if (showSpinner) setLoading(true);
     try {
-      // Query semplice senza join per evitare errori RLS
-      const { data: visits, error } = await supabase
+      const { data: visits } = await supabase
         .from('visits')
         .select('id, store_id, end_time, start_time')
         .eq('user_id', user.id)
         .is('deleted_at', null)
         .order('start_time', { ascending: false });
 
-      if (error) throw error;
-
       const totalVisite = visits?.length || 0;
       const storeVisitati = new Set(visits?.map(v => v.store_id)).size;
       const visteCompletate = visits?.filter(v => v.end_time).length || 0;
       setStats({ totalVisite, storeVisitati, visteCompletate });
 
-      // Carica i nomi degli store separatamente per le ultime 3 visite
       const last3 = (visits || []).slice(0, 3);
       if (last3.length > 0) {
         const storeIds = [...new Set(last3.map(v => v.store_id))];
@@ -46,17 +39,11 @@ export default function HomePage({ onNavigate }) {
       }
     } catch (err) {
       console.error('Errore home:', err);
-      // Non bloccare la UI in caso di errore
-      setStats({ totalVisite: 0, storeVisitati: 0, visteCompletate: 0 });
-      setRecentVisits([]);
-    } finally {
-      setLoading(false); // sempre, indipendentemente da showSpinner
     }
   }, [user]);
 
-  useEffect(() => { loadData(true); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Ricarica in background senza rotellina dopo 5 minuti
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState === 'hidden') {
@@ -64,7 +51,7 @@ export default function HomePage({ onNavigate }) {
       } else {
         const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
         hiddenAtRef.current = null;
-        if (hiddenFor > 5 * 60 * 1000) loadData(false);
+        if (hiddenFor > 5 * 60 * 1000) loadData();
       }
     };
     document.addEventListener('visibilitychange', handler);
@@ -173,16 +160,12 @@ export default function HomePage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Statistiche rapide — sempre visibili, spinner solo durante caricamento */}
-      {loading ? (
-        <div className="flex justify-center py-4"><Spinner /></div>
-      ) : (
-        <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Visite totali" value={stats.totalVisite} icon="📋" />
-          <StatCard label="Store visitati" value={stats.storeVisitati} icon="🏪" />
-          <StatCard label="Completate" value={stats.visteCompletate} icon="✅" />
-        </div>
-      )}
+      {/* Statistiche — sempre visibili, partono da 0 e si aggiornano */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard label="Visite totali" value={stats.totalVisite} icon="📋" />
+        <StatCard label="Store visitati" value={stats.storeVisitati} icon="🏪" />
+        <StatCard label="Completate" value={stats.visteCompletate} icon="✅" />
+      </div>
 
       {/* Azioni principali */}
       <div>
@@ -251,7 +234,7 @@ function StatCard({ label, value, icon }) {
   return (
     <div className="card text-center py-3">
       <span className="text-2xl">{icon}</span>
-      <p className="font-bold text-xl text-slate-800 mt-1">{value ?? 0}</p>
+      <p className="font-bold text-xl text-slate-800 mt-1">{value}</p>
       <p className="text-[10px] text-slate-400 font-medium mt-0.5">{label}</p>
     </div>
   );
