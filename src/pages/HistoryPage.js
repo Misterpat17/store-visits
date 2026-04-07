@@ -25,9 +25,10 @@ export default function HistoryPage() {
     if (!user) return;
     setLoading(true);
     try {
+      // Query visite senza join a profiles (usa solo stores)
       let q = supabase
         .from('visits')
-        .select('*, stores(nome, sede, area), profiles(nome)')
+        .select('*, stores(nome, sede, area)')
         .order('start_time', { ascending: false });
 
       if (activeTab === 'cestino') {
@@ -43,9 +44,28 @@ export default function HistoryPage() {
         if (filterStore) q = q.eq('store_id', filterStore);
       }
 
-      const { data, error } = await q;
+      const { data: visitsData, error } = await q;
       if (error) throw error;
-      setVisits(data || []);
+
+      // Se admin, carica i nomi utenti separatamente
+      if (isAdmin && visitsData?.length > 0) {
+        const userIds = [...new Set(visitsData.map(v => v.user_id))];
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, nome')
+          .in('id', userIds);
+
+        const profilesMap = {};
+        (profilesData || []).forEach(p => { profilesMap[p.id] = p; });
+
+        const visitsWithProfiles = visitsData.map(v => ({
+          ...v,
+          profiles: profilesMap[v.user_id] || null,
+        }));
+        setVisits(visitsWithProfiles);
+      } else {
+        setVisits(visitsData || []);
+      }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
       setVisits([]);
@@ -54,7 +74,6 @@ export default function HistoryPage() {
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
-  // Aspetta che l'auth sia pronta prima di caricare
   useEffect(() => {
     if (!authLoading && user) {
       fetchVisits();
@@ -96,14 +115,12 @@ export default function HistoryPage() {
     return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
   };
 
-  // Mostra spinner se auth o dati stanno caricando
   if (authLoading) {
     return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
   }
 
   return (
     <div className="flex flex-col">
-      {/* Tab cestino (solo admin) */}
       {isAdmin && (
         <div className="flex bg-slate-50 border-b border-slate-100">
           {TABS.map(t => (
@@ -121,7 +138,6 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* Filtri admin */}
       {isAdmin && (
         <div className="p-4 bg-white border-b border-slate-100 flex flex-col gap-2">
           <p className="section-title">Filtra visite</p>
@@ -140,7 +156,6 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* Lista visite */}
       {loading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       ) : visits.length === 0 ? (
