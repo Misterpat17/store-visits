@@ -15,20 +15,29 @@ import './index.css';
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
-  const [tabKey, setTabKey] = useState(0);
+  // Una key separata per ogni tab — così rimonta solo il tab che si apre
+  const [keys, setKeys] = useState({
+    home: 0,
+    'nuova-visita': 0,
+    storico: 0,
+    'store-stats': 0,
+    dashboard: 0,
+    admin: 0,
+  });
   const prevUserRef = useRef(null);
 
   useEffect(() => {
     if (user && !prevUserRef.current) {
       setActiveTab('home');
-      setTabKey(prev => prev + 1);
+      setKeys(prev => ({ ...prev, home: prev.home + 1 }));
     }
     prevUserRef.current = user;
   }, [user]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    setTabKey(prev => prev + 1);
+    // Rimonta solo il tab di destinazione, non gli altri
+    setKeys(prev => ({ ...prev, [tab]: prev[tab] + 1 }));
   };
 
   if (loading) {
@@ -41,18 +50,6 @@ function AppContent() {
 
   if (!user) return <LoginPage />;
 
-  const renderPage = () => {
-    switch (activeTab) {
-      case 'home': return <HomePage key={tabKey} onNavigate={handleTabChange} />;
-      case 'nuova-visita': return <NewVisitPage key={tabKey} />;
-      case 'storico': return <HistoryPage key={tabKey} />;
-      case 'store-stats': return <StoreStatsPage key={tabKey} />;
-      case 'dashboard': return <DashboardPage key={tabKey} />;
-      case 'admin': return <AdminPage key={tabKey} />;
-      default: return <HomePage key={tabKey} onNavigate={handleTabChange} />;
-    }
-  };
-
   const tabLabels = {
     'home': 'Home',
     'nuova-visita': 'Nuova Visita',
@@ -60,6 +57,18 @@ function AppContent() {
     'store-stats': 'Store',
     'dashboard': 'Dashboard',
     'admin': 'Amministrazione',
+  };
+
+  const renderPage = () => {
+    switch (activeTab) {
+      case 'home': return <HomePage key={keys.home} onNavigate={handleTabChange} />;
+      case 'nuova-visita': return <NewVisitPage key={keys['nuova-visita']} />;
+      case 'storico': return <HistoryPage key={keys.storico} />;
+      case 'store-stats': return <StoreStatsPage key={keys['store-stats']} />;
+      case 'dashboard': return <DashboardPage key={keys.dashboard} />;
+      case 'admin': return <AdminPage key={keys.admin} />;
+      default: return <HomePage key={keys.home} onNavigate={handleTabChange} />;
+    }
   };
 
   return (
@@ -81,9 +90,11 @@ function AppContent() {
           <span className="text-white/70 text-xs">{tabLabels[activeTab]}</span>
         </div>
       </header>
+
       <main className="flex-1 overflow-y-auto pb-24">
         {renderPage()}
       </main>
+
       <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
     </div>
   );
