@@ -15,24 +15,24 @@ import './index.css';
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
-  const [tabKey, setTabKey] = useState(0);
+  // tabKey usato SOLO per NewVisitPage che deve sempre rimontarsi
+  const [visitKey, setVisitKey] = useState(0);
   const prevUserRef = useRef(null);
 
   // Reset alla home solo quando l'utente fa login (da null a utente)
   useEffect(() => {
     if (user && !prevUserRef.current) {
       setActiveTab('home');
-      setTabKey(prev => prev + 1);
     }
     prevUserRef.current = user;
   }, [user]);
 
-  // Nessun listener visibilitychange — i dati si ricaricano solo quando
-  // l'utente cambia tab nell'app, non ad ogni cambio scheda del browser
-
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    setTabKey(prev => prev + 1);
+    // Rimonta solo NewVisitPage quando ci si torna
+    if (tab === 'nuova-visita') {
+      setVisitKey(prev => prev + 1);
+    }
   };
 
   if (loading) {
@@ -44,18 +44,6 @@ function AppContent() {
   }
 
   if (!user) return <LoginPage />;
-
-  const renderPage = () => {
-    switch (activeTab) {
-      case 'home': return <HomePage key={tabKey} onNavigate={handleTabChange} />;
-      case 'nuova-visita': return <NewVisitPage key={tabKey} />;
-      case 'storico': return <HistoryPage key={tabKey} />;
-      case 'store-stats': return <StoreStatsPage key={tabKey} />;
-      case 'dashboard': return <DashboardPage key={tabKey} />;
-      case 'admin': return <AdminPage key={tabKey} />;
-      default: return <HomePage key={tabKey} onNavigate={handleTabChange} />;
-    }
-  };
 
   const tabLabels = {
     'home': 'Home',
@@ -87,7 +75,25 @@ function AppContent() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
-        {renderPage()}
+        {/* Tutti i tab sono montati e nascosti con CSS — nessun rimount al cambio tab */}
+        <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+          <HomePage onNavigate={handleTabChange} />
+        </div>
+        <div style={{ display: activeTab === 'nuova-visita' ? 'block' : 'none' }}>
+          <NewVisitPage key={visitKey} />
+        </div>
+        <div style={{ display: activeTab === 'storico' ? 'block' : 'none' }}>
+          <HistoryPage />
+        </div>
+        <div style={{ display: activeTab === 'store-stats' ? 'block' : 'none' }}>
+          <StoreStatsPage />
+        </div>
+        <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
+          <DashboardPage />
+        </div>
+        <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
+          <AdminPage />
+        </div>
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
