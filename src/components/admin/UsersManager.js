@@ -1,5 +1,4 @@
 // src/components/admin/UsersManager.js
-// Versione che usa Edge Function per creare utenti con service_role
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Spinner from '../shared/Spinner';
@@ -27,17 +26,27 @@ export default function UsersManager() {
     if (form.password.length < 6) { setError('Password min. 6 caratteri'); return; }
     setSaving(true); setError(''); setSuccess('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Recupera il token di sessione corrente
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !sessionData?.session) throw new Error('Sessione non trovata, rieffettua il login');
+      
+      const token = sessionData.session.access_token;
+      const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+
       const res = await fetch(
-        `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/create-user`,
+        `${supabaseUrl}/functions/v1/create-user`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
           body: JSON.stringify(form),
         }
       );
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Errore');
+      if (!res.ok) throw new Error(result.error || 'Errore nella creazione');
+      
       setSuccess(`Account creato per ${form.nome}`);
       setForm({ nome: '', email: '', password: '', ruolo: 'user' });
       setShowForm(false);
@@ -56,7 +65,11 @@ export default function UsersManager() {
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      {success && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3">✓ {success}</div>}
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3">
+          ✓ {success}
+        </div>
+      )}
 
       <button className="btn-primary w-full" onClick={() => { setShowForm(!showForm); setError(''); setSuccess(''); }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -68,14 +81,20 @@ export default function UsersManager() {
       {showForm && (
         <div className="card flex flex-col gap-3">
           <p className="font-semibold text-slate-800">Crea nuovo account</p>
-          <input className="input-field" placeholder="Nome completo *" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
-          <input className="input-field" type="email" placeholder="Email *" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <input className="input-field" type="password" placeholder="Password * (min. 6 caratteri)" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
-          <select className="input-field" value={form.ruolo} onChange={e => setForm({ ...form, ruolo: e.target.value })}>
+          <input className="input-field" placeholder="Nome completo *" value={form.nome}
+            onChange={e => setForm({ ...form, nome: e.target.value })} />
+          <input className="input-field" type="email" placeholder="Email *" value={form.email}
+            onChange={e => setForm({ ...form, email: e.target.value })} />
+          <input className="input-field" type="password" placeholder="Password * (min. 6 caratteri)"
+            value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+          <select className="input-field" value={form.ruolo}
+            onChange={e => setForm({ ...form, ruolo: e.target.value })}>
             <option value="user">Utente standard</option>
             <option value="admin">Amministratore</option>
           </select>
-          {error && <p className="text-red-600 text-sm bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+          {error && (
+            <p className="text-red-600 text-sm bg-red-50 rounded-xl px-3 py-2">{error}</p>
+          )}
           <button className="btn-primary" onClick={createUser} disabled={saving}>
             {saving ? <Spinner size="sm" color="white" /> : null}
             {saving ? 'Creazione...' : 'Crea account'}
@@ -83,19 +102,24 @@ export default function UsersManager() {
         </div>
       )}
 
-      {loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
+      {loading ? (
+        <div className="flex justify-center py-8"><Spinner /></div>
+      ) : (
         <div className="flex flex-col gap-2">
           <p className="section-title">{users.length} utenti registrati</p>
           {users.map(u => (
             <div key={u.id} className="card flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center text-primary-700 font-bold text-sm flex-shrink-0">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center
+                text-blue-700 font-bold text-sm flex-shrink-0">
                 {u.nome?.charAt(0)?.toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 text-sm truncate">{u.nome}</p>
                 <p className="text-xs text-slate-400 truncate">{u.email}</p>
               </div>
-              <button onClick={() => toggleRole(u)} className={`badge shrink-0 ${u.ruolo === 'admin' ? 'badge-blue' : 'badge-gray'}`} title="Clicca per cambiare ruolo">
+              <button onClick={() => toggleRole(u)}
+                className={`badge shrink-0 ${u.ruolo === 'admin' ? 'badge-blue' : 'badge-gray'}`}
+                title="Clicca per cambiare ruolo">
                 {u.ruolo === 'admin' ? '🛡 Admin' : '👤 User'}
               </button>
             </div>
