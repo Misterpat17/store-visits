@@ -43,9 +43,10 @@ export default function HistoryPage() {
         if (filterStore) q = q.eq('store_id', filterStore);
       }
 
-      const { data, error } = await q;
-      if (error) throw error;
-      setVisits(data || []);
+     const { data, error } = await q;
+console.log('Visite:', data, 'Errore:', error);
+if (error) throw error;
+setVisits(data || []);
     } catch (err) {
       console.error('Errore caricamento visite:', err);
       setVisits([]);
