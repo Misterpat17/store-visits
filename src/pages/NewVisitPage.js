@@ -1,5 +1,4 @@
 // src/pages/NewVisitPage.js
-// Versione con attività raggruppate per area
 import { useState } from 'react';
 import { supabase, uploadAttachment } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -10,8 +9,8 @@ import generatePDF from '../lib/generatePDF';
 
 export default function NewVisitPage() {
   const { user, profile } = useAuth();
-  const { stores } = useStores(true);
-  const { activities } = useActivities(true);
+  const { stores, refetch: refetchStores } = useStores(true);
+  const { activities, refetch: refetchActivities } = useActivities(true);
 
   const [phase, setPhase] = useState('select');
   const [selectedStore, setSelectedStore] = useState('');
@@ -48,7 +47,6 @@ export default function NewVisitPage() {
         .single();
       if (visitErr) throw visitErr;
 
-      // Ordina attività per ordine
       const sorted = [...activities].sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
       const actRows = sorted.map(a => ({
         visit_id: newVisit.id,
@@ -63,9 +61,10 @@ export default function NewVisitPage() {
       if (actsErr) throw actsErr;
 
       setVisit(newVisit);
-      setVisitActivities(createdActs
-        .map(va => ({ ...va, attachments: [] }))
-        .sort((a, b) => (a.activities?.ordine || 0) - (b.activities?.ordine || 0))
+      setVisitActivities(
+        createdActs
+          .map(va => ({ ...va, attachments: [] }))
+          .sort((a, b) => (a.activities?.ordine || 0) - (b.activities?.ordine || 0))
       );
       setPhase('active');
     } catch (err) {
@@ -128,12 +127,16 @@ export default function NewVisitPage() {
     setSaving(false);
   };
 
-  const resetVisit = () => {
+  // Reset completo con refetch dei dati
+  const resetVisit = async () => {
     setPhase('select');
     setSelectedStore('');
     setVisit(null);
     setVisitActivities([]);
     setGeneralNote('');
+    // Ricarica store e attività freschi dal DB
+    await refetchStores();
+    await refetchActivities();
   };
 
   const storeName = stores.find(s => s.id === selectedStore)?.nome || '';
@@ -175,7 +178,6 @@ export default function NewVisitPage() {
   // ── FASE 2/3: Visita attiva o chiusa ──
   return (
     <div className="flex flex-col gap-0">
-      {/* Header visita */}
       <div className={`px-4 py-3 ${phase === 'closed' ? 'bg-emerald-700' : 'bg-amber-500'} text-white`}>
         <div className="flex items-center justify-between">
           <div>
@@ -199,7 +201,6 @@ export default function NewVisitPage() {
       {/* Attività raggruppate per area */}
       {Object.entries(activitiesByArea).map(([area, areaActs]) => (
         <div key={area}>
-          {/* Header area */}
           <div className="px-4 py-2 bg-slate-100 border-y border-slate-200">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{area}</p>
           </div>
