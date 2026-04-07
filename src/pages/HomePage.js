@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
 
 export default function HomePage({ onNavigate }) {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [recentVisits, setRecentVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,17 +34,11 @@ export default function HomePage({ onNavigate }) {
     }
   }, [user]);
 
-  // Carica dati al mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Ricarica dati quando l'app torna in primo piano
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadData();
-      }
+      if (document.visibilityState === 'visible') loadData();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -128,12 +122,29 @@ export default function HomePage({ onNavigate }) {
     <div className="p-4 flex flex-col gap-4">
       {/* Benvenuto */}
       <div className="bg-blue-800 rounded-2xl p-5 text-white">
-        <p className="text-blue-200 text-sm font-medium">{getOra()},</p>
-        <p className="text-2xl font-bold mt-0.5">{profile?.nome || '—'}</p>
-        <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
-          ${isAdmin ? 'bg-amber-400 text-amber-900' : 'bg-blue-600 text-white'}`}>
-          {isAdmin ? '🛡 Amministratore' : '👤 Utente'}
-        </span>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-blue-200 text-sm font-medium">{getOra()},</p>
+            <p className="text-2xl font-bold mt-0.5">{profile?.nome || '—'}</p>
+            <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
+              ${isAdmin ? 'bg-amber-400 text-amber-900' : 'bg-blue-600 text-white'}`}>
+              {isAdmin ? '🛡 Amministratore' : '👤 Utente'}
+            </span>
+          </div>
+          {/* Bottone logout */}
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30
+              px-3 py-2 rounded-xl text-xs font-semibold text-white transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16,17 21,12 16,7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Esci
+          </button>
+        </div>
       </div>
 
       {/* Statistiche rapide */}
