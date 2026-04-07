@@ -1,5 +1,5 @@
 // src/pages/HomePage.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
@@ -9,10 +9,11 @@ export default function HomePage({ onNavigate }) {
   const [stats, setStats] = useState(null);
   const [recentVisits, setRecentVisits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const hiddenAtRef = useRef(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = true) => {
     if (!user) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const { data: visits } = await supabase
         .from('visits')
@@ -30,18 +31,27 @@ export default function HomePage({ onNavigate }) {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [user]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData(true); }, [loadData]);
 
+  // Ricarica in background (senza rotellina) solo se in background > 5 minuti
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') loadData();
+    const handleHide = () => { hiddenAtRef.current = Date.now(); };
+    const handleShow = () => {
+      const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+      hiddenAtRef.current = null;
+      if (hiddenFor > 5 * 60 * 1000) {
+        loadData(false); // false = nessuna rotellina
+      }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') handleHide();
+      else handleShow();
+    });
+    return () => document.removeEventListener('visibilitychange', handleHide);
   }, [loadData]);
 
   const getOra = () => {
@@ -131,7 +141,6 @@ export default function HomePage({ onNavigate }) {
               {isAdmin ? '🛡 Amministratore' : '👤 Utente'}
             </span>
           </div>
-          {/* Bottone logout */}
           <button
             onClick={logout}
             className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30
