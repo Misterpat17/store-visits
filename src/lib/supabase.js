@@ -12,7 +12,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false,
+    // Disabilita il lock per evitare conflitti su refresh
+    lock: (name, acquireTimeout, fn) => fn(),
   },
 });
 
