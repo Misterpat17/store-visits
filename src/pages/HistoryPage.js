@@ -14,7 +14,7 @@ export default function HistoryPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('visite');
   const [visits, setVisits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [filterUser, setFilterUser] = useState('');
   const [filterStore, setFilterStore] = useState('');
@@ -25,7 +25,6 @@ export default function HistoryPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // Query visite senza join a profiles (usa solo stores)
       let q = supabase
         .from('visits')
         .select('*, stores(nome, sede, area)')
@@ -47,7 +46,6 @@ export default function HistoryPage() {
       const { data: visitsData, error } = await q;
       if (error) throw error;
 
-      // Se admin, carica i nomi utenti separatamente
       if (isAdmin && visitsData?.length > 0) {
         const userIds = [...new Set(visitsData.map(v => v.user_id))];
         const { data: profilesData } = await supabase
@@ -58,11 +56,7 @@ export default function HistoryPage() {
         const profilesMap = {};
         (profilesData || []).forEach(p => { profilesMap[p.id] = p; });
 
-        const visitsWithProfiles = visitsData.map(v => ({
-          ...v,
-          profiles: profilesMap[v.user_id] || null,
-        }));
-        setVisits(visitsWithProfiles);
+        setVisits(visitsData.map(v => ({ ...v, profiles: profilesMap[v.user_id] || null })));
       } else {
         setVisits(visitsData || []);
       }
@@ -75,9 +69,7 @@ export default function HistoryPage() {
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchVisits();
-    }
+    if (!authLoading && user) fetchVisits();
   }, [authLoading, user, fetchVisits]);
 
   useEffect(() => {
@@ -114,10 +106,6 @@ export default function HistoryPage() {
     const d = new Date(iso);
     return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
   };
-
-  if (authLoading) {
-    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
-  }
 
   return (
     <div className="flex flex-col">
@@ -241,14 +229,14 @@ export default function HistoryPage() {
                   ) : (
                     <>
                       <button onClick={() => restore(v.id)}
-                        className="p-2 text-slate-400 active:text-emerald-600" title="Ripristina">
+                        className="p-2 text-slate-400 active:text-emerald-600">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/>
                           <path d="M3 3v5h5"/>
                         </svg>
                       </button>
                       <button onClick={() => hardDelete(v.id)}
-                        className="p-2 text-red-400 active:text-red-600" title="Elimina definitivamente">
+                        className="p-2 text-red-400 active:text-red-600">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="3,6 5,6 21,6"/>
                           <path d="M19,6l-1,14H6L5,6"/>
