@@ -1,5 +1,5 @@
 // src/pages/StoreStatsPage.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
@@ -16,6 +16,7 @@ export default function StoreStatsPage() {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [period, setPeriod] = useState(30);
+  const initializedRef = useRef(false);
 
   const fetchStats = useCallback(async () => {
     if (!user) return;
@@ -40,17 +41,10 @@ export default function StoreStatsPage() {
       const { data: visits, error: visitErr } = await visitQuery;
       if (visitErr) throw visitErr;
 
-      if (!visits || visits.length === 0) {
-        setStats([]);
-        return;
-      }
+      if (!visits || visits.length === 0) { setStats([]); return; }
 
       const userIds = [...new Set(visits.map(v => v.user_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, nome')
-        .in('id', userIds);
-
+      const { data: profiles } = await supabase.from('profiles').select('id, nome').in('id', userIds);
       const profileMap = {};
       (profiles || []).forEach(p => { profileMap[p.id] = p.nome; });
 
@@ -60,10 +54,7 @@ export default function StoreStatsPage() {
         const storeName = v.stores?.nome || 'Sconosciuto';
         const storeArea = v.stores?.area || '';
         const userName = profileMap[v.user_id] || 'Sconosciuto';
-
-        if (!storeMap[storeId]) {
-          storeMap[storeId] = { storeId, storeName, storeArea, totalVisits: 0, users: {} };
-        }
+        if (!storeMap[storeId]) storeMap[storeId] = { storeId, storeName, storeArea, totalVisits: 0, users: {} };
         storeMap[storeId].totalVisits++;
         storeMap[storeId].users[userName] = (storeMap[storeId].users[userName] || 0) + 1;
       });
@@ -77,22 +68,27 @@ export default function StoreStatsPage() {
     }
   }, [user, isAdmin, period]);
 
+  // Carica solo se non ancora inizializzato
   useEffect(() => {
-    if (!authLoading && user) fetchStats();
+    if (authLoading || !user) return;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    fetchStats();
   }, [authLoading, user, fetchStats]);
+
+  // Ricarica quando cambia il periodo
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    fetchStats();
+  }, [period]); // eslint-disable-line
 
   return (
     <div className="flex flex-col">
       <div className="p-4 bg-white border-b border-slate-100 flex gap-2 flex-wrap">
         {PERIOD_OPTIONS.map(opt => (
-          <button
-            key={opt.label}
-            onClick={() => setPeriod(opt.days)}
+          <button key={opt.label} onClick={() => setPeriod(opt.days)}
             className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors
-              ${period === opt.days
-                ? 'bg-blue-700 text-white'
-                : 'bg-white text-slate-600 border border-slate-200'}`}
-          >
+              ${period === opt.days ? 'bg-blue-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
             {opt.label}
           </button>
         ))}
@@ -111,10 +107,8 @@ export default function StoreStatsPage() {
           <p className="section-title">{stats.length} store visitati · {stats.reduce((s, x) => s + x.totalVisits, 0)} visite totali</p>
           {stats.map(s => (
             <div key={s.storeId} className="card p-0 overflow-hidden">
-              <button
-                className="w-full flex items-center px-4 py-3.5 gap-3 active:bg-slate-50"
-                onClick={() => setExpanded(expanded === s.storeId ? null : s.storeId)}
-              >
+              <button className="w-full flex items-center px-4 py-3.5 gap-3 active:bg-slate-50"
+                onClick={() => setExpanded(expanded === s.storeId ? null : s.storeId)}>
                 <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                   <span className="font-bold text-blue-700 text-sm">{s.totalVisits}</span>
                 </div>
@@ -132,24 +126,17 @@ export default function StoreStatsPage() {
                   </svg>
                 </div>
               </button>
-
               {expanded === s.storeId && (
                 <div className="border-t border-slate-100 divide-y divide-slate-50">
-                  {Object.entries(s.users)
-                    .sort(([, a], [, b]) => b - a)
-                    .map(([uName, count]) => (
-                      <div key={uName} className="flex items-center px-4 py-2.5 gap-3 bg-slate-50">
-                        <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-bold text-blue-700">
-                            {uName.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <span className="text-sm text-slate-700 flex-1">{uName}</span>
-                        <span className="font-semibold text-slate-600 text-sm">
-                          {count} {count === 1 ? 'visita' : 'visite'}
-                        </span>
+                  {Object.entries(s.users).sort(([, a], [, b]) => b - a).map(([uName, count]) => (
+                    <div key={uName} className="flex items-center px-4 py-2.5 gap-3 bg-slate-50">
+                      <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-bold text-blue-700">{uName.charAt(0).toUpperCase()}</span>
                       </div>
-                    ))}
+                      <span className="text-sm text-slate-700 flex-1">{uName}</span>
+                      <span className="font-semibold text-slate-600 text-sm">{count} {count === 1 ? 'visita' : 'visite'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
