@@ -1,12 +1,9 @@
 // src/pages/DashboardPage.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const PERIOD_OPTIONS = [
   { label: '7 giorni', days: 7 },
@@ -23,6 +20,7 @@ export default function DashboardPage() {
   const [allUsers, setAllUsers] = useState([]);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(false);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     if (!isAdmin || authLoading) return;
@@ -93,9 +91,19 @@ export default function DashboardPage() {
     }
   }, [user, isAdmin, period, filterUser]);
 
+  // Carica solo se non ancora inizializzato
   useEffect(() => {
-    if (!authLoading && user) fetchStats();
+    if (authLoading || !user) return;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    fetchStats();
   }, [authLoading, user, fetchStats]);
+
+  // Ricarica quando cambiano i filtri (period, filterUser)
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    fetchStats();
+  }, [period, filterUser]); // eslint-disable-line
 
   return (
     <div className="p-4 flex flex-col gap-4">
@@ -105,19 +113,14 @@ export default function DashboardPage() {
             key={opt.label}
             onClick={() => setPeriod(opt.days)}
             className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors
-              ${period === opt.days
-                ? 'bg-blue-700 text-white'
-                : 'bg-white text-slate-600 border border-slate-200'}`}
+              ${period === opt.days ? 'bg-blue-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
           >
             {opt.label}
           </button>
         ))}
         {isAdmin && (
-          <select
-            className="input-field text-sm py-1.5 ml-auto"
-            value={filterUser}
-            onChange={e => setFilterUser(e.target.value)}
-          >
+          <select className="input-field text-sm py-1.5 ml-auto" value={filterUser}
+            onChange={e => setFilterUser(e.target.value)}>
             <option value="">Tutti gli utenti</option>
             {allUsers.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
           </select>
@@ -130,12 +133,8 @@ export default function DashboardPage() {
         <>
           <div className="grid grid-cols-2 gap-3">
             <KPICard label="Visite totali" value={stats.totalVisits} icon="🏪" color="blue" />
-            <KPICard
-              label="Completamento"
-              value={`${stats.completionRate}%`}
-              icon="✅"
-              color={stats.completionRate >= 80 ? 'green' : stats.completionRate >= 50 ? 'amber' : 'red'}
-            />
+            <KPICard label="Completamento" value={`${stats.completionRate}%`} icon="✅"
+              color={stats.completionRate >= 80 ? 'green' : stats.completionRate >= 50 ? 'amber' : 'red'} />
             <KPICard label="Attività OK" value={stats.completedActs} icon="☑️" color="green" />
             <KPICard label="Non completate" value={stats.totalActs - stats.completedActs} icon="⬜" color="gray" />
           </div>
@@ -149,14 +148,10 @@ export default function DashboardPage() {
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }}
                     tickFormatter={v => v.length > 10 ? v.slice(0, 10) + '…' : v} />
                   <YAxis tick={{ fontSize: 10, fill: '#64748b' }} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
-                    formatter={(v) => [v, 'Visite']}
-                  />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
+                    formatter={(v) => [v, 'Visite']} />
                   <Bar dataKey="visite" radius={[6, 6, 0, 0]}>
-                    {stats.storeData.map((_, i) => (
-                      <Cell key={i} fill={i === 0 ? '#1d4ed8' : '#93c5fd'} />
-                    ))}
+                    {stats.storeData.map((_, i) => <Cell key={i} fill={i === 0 ? '#1d4ed8' : '#93c5fd'} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -192,13 +187,8 @@ export default function DashboardPage() {
 }
 
 function KPICard({ label, value, icon, color }) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-emerald-50 text-emerald-700',
-    amber: 'bg-amber-50 text-amber-700',
-    red: 'bg-red-50 text-red-700',
-    gray: 'bg-slate-50 text-slate-600',
-  };
+  const colors = { blue: 'bg-blue-50 text-blue-700', green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700', gray: 'bg-slate-50 text-slate-600' };
   return (
     <div className={`rounded-2xl p-4 ${colors[color] || colors.gray}`}>
       <span className="text-2xl">{icon}</span>
