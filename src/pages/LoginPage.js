@@ -36,8 +36,8 @@ export default function LoginPage() {
           </svg>
         </div>
         <div className="text-center">
-          <h1 className="text-white text-2xl font-bold">Store Visit</h1>
-          <p className="text-primary-200 text-sm">Manager</p>
+        <h1 className="text-white text-2xl font-bold">Bruno Store Check</h1>
+<p className="text-primary-200 text-sm">Funzione Commerciale</p>
         </div>
       </div>
 
