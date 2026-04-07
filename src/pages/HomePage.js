@@ -6,7 +6,7 @@ import Spinner from '../components/shared/Spinner';
 
 export default function HomePage({ onNavigate }) {
   const { user, profile, isAdmin, logout } = useAuth();
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({ totalVisite: 0, storeVisitati: 0, visteCompletate: 0 });
   const [recentVisits, setRecentVisits] = useState([]);
   const [loading, setLoading] = useState(false);
   const hiddenAtRef = useRef(null);
@@ -15,43 +15,60 @@ export default function HomePage({ onNavigate }) {
     if (!user) return;
     if (showSpinner) setLoading(true);
     try {
-      const { data: visits } = await supabase
+      // Query semplice senza join per evitare errori RLS
+      const { data: visits, error } = await supabase
         .from('visits')
-        .select('id, store_id, end_time, start_time, stores(nome)')
+        .select('id, store_id, end_time, start_time')
         .eq('user_id', user.id)
         .is('deleted_at', null)
         .order('start_time', { ascending: false });
 
+      if (error) throw error;
+
       const totalVisite = visits?.length || 0;
       const storeVisitati = new Set(visits?.map(v => v.store_id)).size;
       const visteCompletate = visits?.filter(v => v.end_time).length || 0;
-
       setStats({ totalVisite, storeVisitati, visteCompletate });
-      setRecentVisits((visits || []).slice(0, 3));
+
+      // Carica i nomi degli store separatamente per le ultime 3 visite
+      const last3 = (visits || []).slice(0, 3);
+      if (last3.length > 0) {
+        const storeIds = [...new Set(last3.map(v => v.store_id))];
+        const { data: stores } = await supabase
+          .from('stores')
+          .select('id, nome')
+          .in('id', storeIds);
+        const storeMap = {};
+        (stores || []).forEach(s => { storeMap[s.id] = s.nome; });
+        setRecentVisits(last3.map(v => ({ ...v, storeName: storeMap[v.store_id] || '—' })));
+      } else {
+        setRecentVisits([]);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Errore home:', err);
+      // Non bloccare la UI in caso di errore
+      setStats({ totalVisite: 0, storeVisitati: 0, visteCompletate: 0 });
+      setRecentVisits([]);
     } finally {
-      if (showSpinner) setLoading(false);
+      setLoading(false); // sempre, indipendentemente da showSpinner
     }
   }, [user]);
 
   useEffect(() => { loadData(true); }, [loadData]);
 
-  // Ricarica in background (senza rotellina) solo se in background > 5 minuti
+  // Ricarica in background senza rotellina dopo 5 minuti
   useEffect(() => {
-    const handleHide = () => { hiddenAtRef.current = Date.now(); };
-    const handleShow = () => {
-      const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
-      hiddenAtRef.current = null;
-      if (hiddenFor > 5 * 60 * 1000) {
-        loadData(false); // false = nessuna rotellina
+    const handler = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+      } else {
+        const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+        hiddenAtRef.current = null;
+        if (hiddenFor > 5 * 60 * 1000) loadData(false);
       }
     };
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') handleHide();
-      else handleShow();
-    });
-    return () => document.removeEventListener('visibilitychange', handleHide);
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
   }, [loadData]);
 
   const getOra = () => {
@@ -156,14 +173,14 @@ export default function HomePage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Statistiche rapide */}
+      {/* Statistiche rapide — sempre visibili, spinner solo durante caricamento */}
       {loading ? (
         <div className="flex justify-center py-4"><Spinner /></div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Visite totali" value={stats?.totalVisite} icon="📋" />
-          <StatCard label="Store visitati" value={stats?.storeVisitati} icon="🏪" />
-          <StatCard label="Completate" value={stats?.visteCompletate} icon="✅" />
+          <StatCard label="Visite totali" value={stats.totalVisite} icon="📋" />
+          <StatCard label="Store visitati" value={stats.storeVisitati} icon="🏪" />
+          <StatCard label="Completate" value={stats.visteCompletate} icon="✅" />
         </div>
       )}
 
@@ -215,7 +232,7 @@ export default function HomePage({ onNavigate }) {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800 text-sm truncate">{v.stores?.nome}</p>
+                  <p className="font-semibold text-slate-800 text-sm truncate">{v.storeName}</p>
                   <p className="text-xs text-slate-400">{formatDate(v.start_time)}</p>
                 </div>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2">
@@ -234,7 +251,7 @@ function StatCard({ label, value, icon }) {
   return (
     <div className="card text-center py-3">
       <span className="text-2xl">{icon}</span>
-      <p className="font-bold text-xl text-slate-800 mt-1">{value ?? '—'}</p>
+      <p className="font-bold text-xl text-slate-800 mt-1">{value ?? 0}</p>
       <p className="text-[10px] text-slate-400 font-medium mt-0.5">{label}</p>
     </div>
   );
