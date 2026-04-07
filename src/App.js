@@ -15,29 +15,24 @@ import './index.css';
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
-  // Una key separata per ogni tab — così rimonta solo il tab che si apre
-  const [keys, setKeys] = useState({
-    home: 0,
-    'nuova-visita': 0,
-    storico: 0,
-    'store-stats': 0,
-    dashboard: 0,
-    admin: 0,
-  });
+  // Key usata SOLO per NewVisitPage — deve sempre ripartire da zero
+  const [visitKey, setVisitKey] = useState(0);
   const prevUserRef = useRef(null);
 
+  // Reset alla home solo al login (da null a utente)
   useEffect(() => {
     if (user && !prevUserRef.current) {
       setActiveTab('home');
-      setKeys(prev => ({ ...prev, home: prev.home + 1 }));
     }
     prevUserRef.current = user;
   }, [user]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    // Rimonta solo il tab di destinazione, non gli altri
-    setKeys(prev => ({ ...prev, [tab]: prev[tab] + 1 }));
+    // Rimonta NewVisitPage solo quando si torna su quel tab
+    if (tab === 'nuova-visita') {
+      setVisitKey(prev => prev + 1);
+    }
   };
 
   if (loading) {
@@ -57,18 +52,6 @@ function AppContent() {
     'store-stats': 'Store',
     'dashboard': 'Dashboard',
     'admin': 'Amministrazione',
-  };
-
-  const renderPage = () => {
-    switch (activeTab) {
-      case 'home': return <HomePage key={keys.home} onNavigate={handleTabChange} />;
-      case 'nuova-visita': return <NewVisitPage key={keys['nuova-visita']} />;
-      case 'storico': return <HistoryPage key={keys.storico} />;
-      case 'store-stats': return <StoreStatsPage key={keys['store-stats']} />;
-      case 'dashboard': return <DashboardPage key={keys.dashboard} />;
-      case 'admin': return <AdminPage key={keys.admin} />;
-      default: return <HomePage key={keys.home} onNavigate={handleTabChange} />;
-    }
   };
 
   return (
@@ -91,8 +74,30 @@ function AppContent() {
         </div>
       </header>
 
+      {/* 
+        I tab vengono mostrati/nascosti con CSS invece di essere rimontati.
+        Questo evita la rotellina ogni volta che si cambia tab.
+        Solo NewVisitPage usa una key per rimontarsi quando si torna su quel tab.
+      */}
       <main className="flex-1 overflow-y-auto pb-24">
-        {renderPage()}
+        <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+          <HomePage onNavigate={handleTabChange} />
+        </div>
+        <div style={{ display: activeTab === 'nuova-visita' ? 'block' : 'none' }}>
+          <NewVisitPage key={visitKey} />
+        </div>
+        <div style={{ display: activeTab === 'storico' ? 'block' : 'none' }}>
+          <HistoryPage />
+        </div>
+        <div style={{ display: activeTab === 'store-stats' ? 'block' : 'none' }}>
+          <StoreStatsPage />
+        </div>
+        <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
+          <DashboardPage />
+        </div>
+        <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
+          <AdminPage />
+        </div>
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
