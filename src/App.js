@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage';
 import NewVisitPage from './pages/NewVisitPage';
 import HistoryPage from './pages/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
@@ -13,7 +14,7 @@ import './index.css';
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('nuova-visita');
+  const [activeTab, setActiveTab] = useState('home');
   const [tabKey, setTabKey] = useState(0);
 
   const handleTabChange = (tab) => {
@@ -33,16 +34,18 @@ function AppContent() {
 
   const renderPage = () => {
     switch (activeTab) {
+      case 'home': return <HomePage key={tabKey} onNavigate={handleTabChange} />;
       case 'nuova-visita': return <NewVisitPage key={tabKey} />;
       case 'storico': return <HistoryPage key={tabKey} />;
       case 'store-stats': return <StoreStatsPage key={tabKey} />;
       case 'dashboard': return <DashboardPage key={tabKey} />;
       case 'admin': return <AdminPage key={tabKey} />;
-      default: return <NewVisitPage key={tabKey} />;
+      default: return <HomePage key={tabKey} onNavigate={handleTabChange} />;
     }
   };
 
   const tabLabels = {
+    'home': 'Home',
     'nuova-visita': 'Nuova Visita',
     'storico': 'Storico',
     'store-stats': 'Store',
