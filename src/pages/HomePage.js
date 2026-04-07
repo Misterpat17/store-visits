@@ -1,42 +1,54 @@
 // src/pages/HomePage.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
 
-export default function HomePage({ setActiveTab }) {
+export default function HomePage({ onNavigate }) {
   const { user, profile, isAdmin } = useAuth();
   const [stats, setStats] = useState(null);
   const [recentVisits, setRecentVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!user) return;
-    async function loadData() {
-      setLoading(true);
-      try {
-        // Statistiche rapide
-        const { data: visits } = await supabase
-          .from('visits')
-          .select('id, store_id, end_time, stores(nome)')
-          .eq('user_id', user.id)
-          .is('deleted_at', null)
-          .order('start_time', { ascending: false });
+    setLoading(true);
+    try {
+      const { data: visits } = await supabase
+        .from('visits')
+        .select('id, store_id, end_time, start_time, stores(nome)')
+        .eq('user_id', user.id)
+        .is('deleted_at', null)
+        .order('start_time', { ascending: false });
 
-        const totalVisite = visits?.length || 0;
-        const storeVisitati = new Set(visits?.map(v => v.store_id)).size;
-        const visteCompletate = visits?.filter(v => v.end_time).length || 0;
+      const totalVisite = visits?.length || 0;
+      const storeVisitati = new Set(visits?.map(v => v.store_id)).size;
+      const visteCompletate = visits?.filter(v => v.end_time).length || 0;
 
-        setStats({ totalVisite, storeVisitati, visteCompletate });
-        setRecentVisits((visits || []).slice(0, 3));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      setStats({ totalVisite, storeVisitati, visteCompletate });
+      setRecentVisits((visits || []).slice(0, 3));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    loadData();
   }, [user]);
+
+  // Carica dati al mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Ricarica dati quando l'app torna in primo piano
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [loadData]);
 
   const getOra = () => {
     const h = new Date().getHours();
@@ -70,6 +82,18 @@ export default function HomePage({ setActiveTab }) {
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
           <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'store-stats',
+      label: 'Store',
+      desc: 'Visite per store',
+      color: 'bg-indigo-600',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          <polyline points="9,22 9,12 15,12 15,22"/>
         </svg>
       ),
     },
@@ -130,7 +154,7 @@ export default function HomePage({ setActiveTab }) {
           {actions.map(action => (
             <button
               key={action.id}
-              onClick={() => setActiveTab(action.id)}
+              onClick={() => onNavigate(action.id)}
               className={`${action.color} rounded-2xl p-4 text-left text-white
                 active:opacity-80 transition-opacity flex flex-col gap-3`}
             >
@@ -154,7 +178,7 @@ export default function HomePage({ setActiveTab }) {
             {recentVisits.map(v => (
               <button
                 key={v.id}
-                onClick={() => setActiveTab('storico')}
+                onClick={() => onNavigate('storico')}
                 className="card flex items-center gap-3 text-left active:bg-slate-50"
               >
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
