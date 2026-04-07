@@ -1,5 +1,5 @@
 // src/pages/NewVisitPage.js
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, uploadAttachment } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useStores, useActivities } from '../hooks/useStores';
@@ -8,7 +8,7 @@ import ActivityRow from '../components/visits/ActivityRow';
 import generatePDF from '../lib/generatePDF';
 
 export default function NewVisitPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { stores, refetch: refetchStores } = useStores(true);
   const { activities, refetch: refetchActivities } = useActivities(true);
 
@@ -127,23 +127,24 @@ export default function NewVisitPage() {
     setSaving(false);
   };
 
-  // Reset completo con refetch dei dati
   const resetVisit = async () => {
     setPhase('select');
     setSelectedStore('');
     setVisit(null);
     setVisitActivities([]);
     setGeneralNote('');
-    // Ricarica store e attività freschi dal DB
     await refetchStores();
     await refetchActivities();
   };
+
+  if (authLoading) {
+    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
+  }
 
   const storeName = stores.find(s => s.id === selectedStore)?.nome || '';
   const completed = visitActivities.filter(v => v.completed).length;
   const total = visitActivities.length;
 
-  // ── FASE 1: Selezione store ──
   if (phase === 'select') {
     return (
       <div className="p-4 flex flex-col gap-4">
@@ -175,7 +176,6 @@ export default function NewVisitPage() {
     );
   }
 
-  // ── FASE 2/3: Visita attiva o chiusa ──
   return (
     <div className="flex flex-col gap-0">
       <div className={`px-4 py-3 ${phase === 'closed' ? 'bg-emerald-700' : 'bg-amber-500'} text-white`}>
@@ -198,7 +198,6 @@ export default function NewVisitPage() {
         </div>
       </div>
 
-      {/* Attività raggruppate per area */}
       {Object.entries(activitiesByArea).map(([area, areaActs]) => (
         <div key={area}>
           <div className="px-4 py-2 bg-slate-100 border-y border-slate-200">
@@ -221,7 +220,6 @@ export default function NewVisitPage() {
         </div>
       ))}
 
-      {/* Note generali */}
       <div className="p-4 bg-white border-t border-slate-100">
         <label className="section-title">Note generali visita</label>
         <textarea className="input-field resize-none" rows={3}
@@ -229,7 +227,6 @@ export default function NewVisitPage() {
           onChange={e => setGeneralNote(e.target.value)} disabled={phase === 'closed'} />
       </div>
 
-      {/* Azioni footer */}
       <div className="p-4 flex flex-col gap-3 bg-white border-t border-slate-100">
         {phase === 'active' && (
           <button className="btn-primary w-full" onClick={closeVisit} disabled={saving}>
