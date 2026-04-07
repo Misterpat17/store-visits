@@ -12,17 +12,11 @@ import BottomNav from './components/shared/BottomNav';
 import Spinner from './components/shared/Spinner';
 import './index.css';
 
-// Tab che possono essere ricaricati senza problemi
-const RELOADABLE_TABS = ['home', 'storico', 'store-stats', 'dashboard'];
-// Soglia: ricarica solo se in background per più di 5 minuti
-const RELOAD_THRESHOLD_MS = 5 * 60 * 1000;
-
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
   const [tabKey, setTabKey] = useState(0);
   const prevUserRef = useRef(null);
-  const hiddenAtRef = useRef(null);
 
   // Reset alla home solo quando l'utente fa login (da null a utente)
   useEffect(() => {
@@ -33,25 +27,8 @@ function AppContent() {
     prevUserRef.current = user;
   }, [user]);
 
-  // Ricarica solo se in background per più di 5 minuti
-  // e solo per tab che non contengono dati in compilazione
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAtRef.current = Date.now();
-      } else if (document.visibilityState === 'visible') {
-        const hiddenFor = hiddenAtRef.current
-          ? Date.now() - hiddenAtRef.current
-          : 0;
-        if (hiddenFor > RELOAD_THRESHOLD_MS && RELOADABLE_TABS.includes(activeTab)) {
-          setTabKey(prev => prev + 1);
-        }
-        hiddenAtRef.current = null;
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [activeTab]);
+  // Nessun listener visibilitychange — i dati si ricaricano solo quando
+  // l'utente cambia tab nell'app, non ad ogni cambio scheda del browser
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
