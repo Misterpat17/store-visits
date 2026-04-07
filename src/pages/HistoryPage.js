@@ -11,7 +11,7 @@ const TABS = [
 ];
 
 export default function HistoryPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('visite');
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,7 @@ export default function HistoryPage() {
   const [allStores, setAllStores] = useState([]);
 
   const fetchVisits = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     try {
       let q = supabase
@@ -29,7 +30,6 @@ export default function HistoryPage() {
         .select('*, stores(nome, sede, area), profiles(nome)')
         .order('start_time', { ascending: false });
 
-      // Filtra cestino o visite normali
       if (activeTab === 'cestino') {
         q = q.not('deleted_at', 'is', null);
       } else {
@@ -43,10 +43,9 @@ export default function HistoryPage() {
         if (filterStore) q = q.eq('store_id', filterStore);
       }
 
-     const { data, error } = await q;
-console.log('Visite:', data, 'Errore:', error);
-if (error) throw error;
-setVisits(data || []);
+      const { data, error } = await q;
+      if (error) throw error;
+      setVisits(data || []);
     } catch (err) {
       console.error('Errore caricamento visite:', err);
       setVisits([]);
@@ -55,13 +54,18 @@ setVisits(data || []);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
-  useEffect(() => { fetchVisits(); }, [fetchVisits]);
+  // Aspetta che l'auth sia pronta prima di caricare
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchVisits();
+    }
+  }, [authLoading, user, fetchVisits]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || authLoading) return;
     supabase.from('profiles').select('id, nome').then(({ data }) => setAllUsers(data || []));
     supabase.from('stores').select('id, nome').eq('attivo', true).then(({ data }) => setAllStores(data || []));
-  }, [isAdmin]);
+  }, [isAdmin, authLoading]);
 
   const softDelete = async (visitId) => {
     if (!window.confirm('Spostare questa visita nel cestino?')) return;
@@ -91,6 +95,11 @@ setVisits(data || []);
     const d = new Date(iso);
     return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
   };
+
+  // Mostra spinner se auth o dati stanno caricando
+  if (authLoading) {
+    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
+  }
 
   return (
     <div className="flex flex-col">
@@ -154,7 +163,6 @@ setVisits(data || []);
         <div className="divide-y divide-slate-100">
           {visits.map(v => (
             <div key={v.id} className="flex items-center px-4 py-3.5 gap-3 bg-white active:bg-slate-50">
-              {/* Icona stato */}
               <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
                 ${activeTab === 'cestino' ? 'bg-red-100' : v.end_time ? 'bg-emerald-100' : 'bg-amber-100'}`}>
                 {activeTab === 'cestino' ? (
@@ -176,7 +184,6 @@ setVisits(data || []);
                 )}
               </div>
 
-              {/* Contenuto */}
               <div className="flex-1 min-w-0 cursor-pointer"
                 onClick={() => activeTab === 'visite' && setSelectedVisit(v)}>
                 <div className="flex items-baseline gap-2">
@@ -196,7 +203,6 @@ setVisits(data || []);
                 </div>
               </div>
 
-              {/* Azioni admin */}
               {isAdmin && (
                 <div className="flex gap-1 flex-shrink-0">
                   {activeTab === 'visite' ? (
@@ -240,7 +246,6 @@ setVisits(data || []);
                 </div>
               )}
 
-              {/* Chevron per utenti normali */}
               {!isAdmin && activeTab === 'visite' && (
                 <button onClick={() => setSelectedVisit(v)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2">
@@ -253,7 +258,6 @@ setVisits(data || []);
         </div>
       )}
 
-      {/* Modal dettaglio */}
       {selectedVisit && (
         <VisitDetailModal
           visitId={selectedVisit.id}
