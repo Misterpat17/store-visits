@@ -13,10 +13,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    // Disabilita il lock per evitare conflitti su refresh
     lock: (name, acquireTimeout, fn) => fn(),
   },
 });
+
+// Helper: esegui una query con retry automatico in caso di errore
+export async function queryWithRetry(queryFn, maxRetries = 3, delayMs = 500) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const result = await queryFn();
+      if (result.error) throw result.error;
+      return result;
+    } catch (err) {
+      if (i === maxRetries - 1) throw err;
+      await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+}
 
 export async function uploadAttachment(visitId, activityId, file) {
   const timestamp = Date.now();
