@@ -7,7 +7,7 @@ import Spinner from '../components/shared/Spinner';
 import ActivityRow from '../components/visits/ActivityRow';
 import generatePDF from '../lib/generatePDF';
 
-export default function NewVisitPage({ onVisitClosed }) {
+export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
   const { user, profile, loading: authLoading } = useAuth();
   const { stores, refetch: refetchStores } = useStores(true);
   const { activities, refetch: refetchActivities } = useActivities(true);
@@ -123,19 +123,21 @@ export default function NewVisitPage({ onVisitClosed }) {
     setVisit(prev => ({ ...prev, end_time: endTime }));
     setPhase('closed');
     setSaving(false);
-    // Notifica App.js che una visita è stata conclusa
-    // così tutti gli altri tab si aggiornano
+    // Aggiorna gli altri tab con i nuovi dati
     if (onVisitClosed) onVisitClosed();
   };
 
   const resetVisit = async () => {
+    // Prima ricarica store e attività
+    await Promise.all([refetchStores(), refetchActivities()]);
+    // Poi resetta lo stato locale
     setPhase('select');
     setSelectedStore('');
     setVisit(null);
     setVisitActivities([]);
     setGeneralNote('');
-    await refetchStores();
-    await refetchActivities();
+    // Rimonta il componente per ripartire pulito
+    if (onVisitReset) onVisitReset();
   };
 
   if (authLoading) {
