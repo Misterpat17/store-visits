@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStores, useActivities } from '../hooks/useStores';
 import Spinner from '../components/shared/Spinner';
 import ActivityRow from '../components/visits/ActivityRow';
+import GeneralAttachments from '../components/visits/GeneralAttachments';
 import generatePDF from '../lib/generatePDF';
 
 export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
@@ -17,6 +18,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
   const [visit, setVisit] = useState(null);
   const [visitActivities, setVisitActivities] = useState([]);
   const [generalNote, setGeneralNote] = useState('');
+  const [generalAttachments, setGeneralAttachments] = useState([]); // file allegati alle note generali
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -85,8 +87,10 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     await supabase.from('visit_activities').update({ notes }).eq('id', vaId);
   };
 
-  const handleFileUpload = async (vaId, files) => {
+  // Upload foto per singola attività
+  const handlePhotoUpload = async (vaId, files) => {
     for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue; // solo immagini
       try {
         setSaving(true);
         const { path, publicUrl, fileName, fileType } = await uploadAttachment(visit.id, vaId, file);
@@ -99,20 +103,62 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
           prev.map(v => v.id === vaId ? { ...v, attachments: [...(v.attachments || []), att] } : v)
         );
       } catch (err) {
-        alert('Errore upload: ' + err.message);
+        alert('Errore upload foto: ' + err.message);
       } finally {
         setSaving(false);
       }
     }
   };
 
-  const handleDeleteAttachment = async (vaId, attId) => {
+  const handleDeletePhoto = async (vaId, attId) => {
     await supabase.from('attachments').delete().eq('id', attId);
     setVisitActivities(prev =>
       prev.map(va => va.id === vaId
         ? { ...va, attachments: va.attachments.filter(a => a.id !== attId) }
         : va)
     );
+  };
+
+  // Upload file allegati alle note generali
+  // Usiamo visit_activity_id = null per indicare allegati generali della visita
+  // Salviamo in una visit_activity fittizia identificata dall'id della visita
+  const handleGeneralFileUpload = async (files) => {
+    for (const file of Array.from(files)) {
+      try {
+        setSaving(true);
+        // Usa 'general' come activity_id nel path per distinguerli
+        const timestamp = Date.now();
+        const path = `attachments/${visit.id}/general/${timestamp}_${file.name}`;
+        const { error } = await supabase.storage.from('attachments').upload(path, file, { upsert: false });
+        if (error) throw error;
+        const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path);
+        // Salva nella tabella visits_files (o riusa attachments con visit_activity_id = null)
+        // Per semplicità usiamo una colonna JSON nella tabella visits
+        // Ma dato che non abbiamo quella colonna, salviamo negli attachments con activity_id speciale
+        const { data: att } = await supabase
+          .from('attachments')
+          .insert({
+            visit_activity_id: null, // null = allegato generale
+            file_url: urlData.publicUrl,
+            file_path: path,
+            file_name: file.name,
+            file_type: file.type,
+            visit_id: visit.id, // colonna aggiuntiva per filtrare
+          })
+          .select()
+          .single();
+        setGeneralAttachments(prev => [...prev, att]);
+      } catch (err) {
+        alert('Errore upload file: ' + err.message);
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleDeleteGeneralFile = async (attId) => {
+    await supabase.from('attachments').delete().eq('id', attId);
+    setGeneralAttachments(prev => prev.filter(a => a.id !== attId));
   };
 
   const closeVisit = async () => {
@@ -123,20 +169,17 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     setVisit(prev => ({ ...prev, end_time: endTime }));
     setPhase('closed');
     setSaving(false);
-    // Aggiorna gli altri tab con i nuovi dati
     if (onVisitClosed) onVisitClosed();
   };
 
   const resetVisit = async () => {
-    // Prima ricarica store e attività
     await Promise.all([refetchStores(), refetchActivities()]);
-    // Poi resetta lo stato locale
     setPhase('select');
     setSelectedStore('');
     setVisit(null);
     setVisitActivities([]);
     setGeneralNote('');
-    // Rimonta il componente per ripartire pulito
+    setGeneralAttachments([]);
     if (onVisitReset) onVisitReset();
   };
 
@@ -159,9 +202,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
             <option value="">— Seleziona uno store —</option>
             {Object.entries(storesByArea).sort(([a], [b]) => a.localeCompare(b)).map(([area, areaStores]) => (
               <optgroup key={area} label={area}>
-                {areaStores.map(s => (
-                  <option key={s.id} value={s.id}>{s.nome}</option>
-                ))}
+                {areaStores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
               </optgroup>
             ))}
           </select>
@@ -181,6 +222,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
 
   return (
     <div className="flex flex-col gap-0">
+      {/* Header visita */}
       <div className={`px-4 py-3 ${phase === 'closed' ? 'bg-emerald-700' : 'bg-amber-500'} text-white`}>
         <div className="flex items-center justify-between">
           <div>
@@ -201,6 +243,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
         </div>
       </div>
 
+      {/* Attività per area */}
       {Object.entries(activitiesByArea).map(([area, areaActs]) => (
         <div key={area}>
           <div className="px-4 py-2 bg-slate-100 border-y border-slate-200">
@@ -215,21 +258,31 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
                 onToggle={(c) => toggleActivity(va.id, c)}
                 onNoteChange={(n) => updateNote(va.id, n)}
                 onNoteBlur={(n) => saveNote(va.id, n)}
-                onFileUpload={(files) => handleFileUpload(va.id, files)}
-                onDeleteAttachment={(attId) => handleDeleteAttachment(va.id, attId)}
+                onFileUpload={(files) => handlePhotoUpload(va.id, files)}
+                onDeleteAttachment={(attId) => handleDeletePhoto(va.id, attId)}
               />
             ))}
           </div>
         </div>
       ))}
 
-      <div className="p-4 bg-white border-t border-slate-100">
-        <label className="section-title">Note generali visita</label>
-        <textarea className="input-field resize-none" rows={3}
-          placeholder="Eventuali note generali..." value={generalNote}
-          onChange={e => setGeneralNote(e.target.value)} disabled={phase === 'closed'} />
+      {/* Note generali + allegati file */}
+      <div className="p-4 bg-white border-t border-slate-100 flex flex-col gap-4">
+        <div>
+          <label className="section-title">Note generali visita</label>
+          <textarea className="input-field resize-none" rows={3}
+            placeholder="Eventuali note generali..." value={generalNote}
+            onChange={e => setGeneralNote(e.target.value)} disabled={phase === 'closed'} />
+        </div>
+        <GeneralAttachments
+          attachments={generalAttachments}
+          readonly={phase === 'closed'}
+          onUpload={handleGeneralFileUpload}
+          onDelete={handleDeleteGeneralFile}
+        />
       </div>
 
+      {/* Azioni */}
       <div className="p-4 flex flex-col gap-3 bg-white border-t border-slate-100">
         {phase === 'active' && (
           <button className="btn-primary w-full" onClick={closeVisit} disabled={saving}>
