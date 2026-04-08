@@ -21,8 +21,6 @@ function AppContent() {
     dashboard: 0,
     'store-stats': 0,
   });
-  // NewVisitPage NON si rimonta mai automaticamente — solo quando
-  // l'utente clicca esplicitamente "Inizia nuova visita"
   const [visitKey, setVisitKey] = useState(0);
   const prevUserRef = useRef(null);
 
@@ -35,11 +33,8 @@ function AppContent() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    // NON rimontare nulla al cambio tab — i componenti mantengono il loro stato
   };
 
-  // Chiamato da NewVisitPage dopo "Concludi visita"
-  // Rimonta solo i tab che devono mostrare i nuovi dati
   const handleVisitClosed = useCallback(() => {
     setRefreshKeys(prev => ({
       home: prev.home + 1,
@@ -49,8 +44,6 @@ function AppContent() {
     }));
   }, []);
 
-  // Chiamato da NewVisitPage dopo "Inizia nuova visita"
-  // Rimonta solo NewVisitPage per ripartire da zero
   const handleVisitReset = useCallback(() => {
     setVisitKey(prev => prev + 1);
   }, []);
@@ -95,7 +88,6 @@ function AppContent() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
-        {/* Tutti i tab montati una sola volta, nascosti con CSS */}
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
           <HomePage key={refreshKeys.home} onNavigate={handleTabChange} />
         </div>
@@ -107,7 +99,7 @@ function AppContent() {
           />
         </div>
         <div style={{ display: activeTab === 'storico' ? 'block' : 'none' }}>
-          <HistoryPage key={refreshKeys.storico} />
+          <HistoryPage key={refreshKeys.storico} onVisitClosed={handleVisitClosed} />
         </div>
         <div style={{ display: activeTab === 'store-stats' ? 'block' : 'none' }}>
           <StoreStatsPage key={refreshKeys['store-stats']} />
