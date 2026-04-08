@@ -1,5 +1,5 @@
 // src/pages/HistoryPage.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
@@ -9,6 +9,15 @@ const TABS = [
   { id: 'visite', label: 'Visite' },
   { id: 'cestino', label: '🗑 Cestino' },
 ];
+
+async function fetchWithRetry(queryFn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const result = await queryFn();
+    if (!result.error) return result.data || [];
+    if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 600 * (i + 1)));
+  }
+  return null; // null = errore dopo tutti i tentativi
+}
 
 export default function HistoryPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -20,42 +29,59 @@ export default function HistoryPage() {
   const [filterStore, setFilterStore] = useState('');
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const fetchVisits = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      let q = supabase
-        .from('visits')
-        .select('*, stores(nome, sede, area)')
-        .order('start_time', { ascending: false });
+      const visitsData = await fetchWithRetry(() => {
+        let q = supabase
+          .from('visits')
+          .select('*, stores(nome, sede, area)')
+          .order('start_time', { ascending: false });
 
-      if (activeTab === 'cestino') q = q.not('deleted_at', 'is', null);
-      else q = q.is('deleted_at', null);
+        if (activeTab === 'cestino') q = q.not('deleted_at', 'is', null);
+        else q = q.is('deleted_at', null);
 
-      if (!isAdmin) q = q.eq('user_id', user.id);
-      else {
-        if (filterUser) q = q.eq('user_id', filterUser);
-        if (filterStore) q = q.eq('store_id', filterStore);
+        if (!isAdmin) q = q.eq('user_id', user.id);
+        else {
+          if (filterUser) q = q.eq('user_id', filterUser);
+          if (filterStore) q = q.eq('store_id', filterStore);
+        }
+        return q;
+      });
+
+      if (!mountedRef.current) return;
+
+      if (visitsData === null) {
+        // Errore dopo tutti i retry — mantieni i dati precedenti
+        setLoading(false);
+        return;
       }
 
-      const { data: visitsData, error } = await q;
-      if (error) throw error;
-
-      if (isAdmin && visitsData?.length > 0) {
+      if (isAdmin && visitsData.length > 0) {
         const userIds = [...new Set(visitsData.map(v => v.user_id))];
-        const { data: profilesData } = await supabase.from('profiles').select('id, nome').in('id', userIds);
+        const profilesData = await fetchWithRetry(() =>
+          supabase.from('profiles').select('id, nome').in('id', userIds)
+        );
+        if (!mountedRef.current) return;
         const profilesMap = {};
         (profilesData || []).forEach(p => { profilesMap[p.id] = p; });
         setVisits(visitsData.map(v => ({ ...v, profiles: profilesMap[v.user_id] || null })));
       } else {
-        setVisits(visitsData || []);
+        setVisits(visitsData);
       }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
-      setVisits([]);
+      // Non azzera visits in caso di errore
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
@@ -93,7 +119,9 @@ export default function HistoryPage() {
     return `${Math.floor(mins / 60)}h ${mins % 60}min`;
   };
 
-  const formatDate = (iso) => new Date(iso).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
+  const formatDate = (iso) => new Date(iso).toLocaleDateString('it-IT', {
+    weekday: 'short', day: '2-digit', month: 'short'
+  });
 
   return (
     <div className="flex flex-col">
@@ -113,11 +141,13 @@ export default function HistoryPage() {
         <div className="p-4 bg-white border-b border-slate-100 flex flex-col gap-2">
           <p className="section-title">Filtra visite</p>
           <div className="flex gap-2">
-            <select className="input-field text-sm flex-1" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+            <select className="input-field text-sm flex-1" value={filterUser}
+              onChange={e => setFilterUser(e.target.value)}>
               <option value="">Tutti gli utenti</option>
               {allUsers.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
             </select>
-            <select className="input-field text-sm flex-1" value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+            <select className="input-field text-sm flex-1" value={filterStore}
+              onChange={e => setFilterStore(e.target.value)}>
               <option value="">Tutti gli store</option>
               {allStores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
@@ -125,9 +155,19 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {loading ? (
+      {/* Rotellina solo in overlay sopra i dati esistenti — non sostituisce il contenuto */}
+      {loading && visits.length === 0 && (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : visits.length === 0 ? (
+      )}
+
+      {loading && visits.length > 0 && (
+        <div className="flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-600 text-xs font-medium">
+          <Spinner size="sm" color="primary" />
+          Aggiornamento in corso...
+        </div>
+      )}
+
+      {!loading && visits.length === 0 && (
         <div className="flex flex-col items-center py-16 px-6 text-center">
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5">
@@ -141,7 +181,9 @@ export default function HistoryPage() {
             {activeTab === 'cestino' ? 'Le visite eliminate appariranno qui.' : 'Le visite completate appariranno qui.'}
           </p>
         </div>
-      ) : (
+      )}
+
+      {visits.length > 0 && (
         <div className="divide-y divide-slate-100">
           {visits.map(v => (
             <div key={v.id} className="flex items-center px-4 py-3.5 gap-3 bg-white active:bg-slate-50">
@@ -163,7 +205,8 @@ export default function HistoryPage() {
                 )}
               </div>
 
-              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => activeTab === 'visite' && setSelectedVisit(v)}>
+              <div className="flex-1 min-w-0 cursor-pointer"
+                onClick={() => activeTab === 'visite' && setSelectedVisit(v)}>
                 <div className="flex items-baseline gap-2">
                   <p className="font-semibold text-slate-800 text-sm truncate">{v.stores?.nome}</p>
                   {v.stores?.area && <span className="text-xs text-slate-400 truncate">{v.stores.area}</span>}
@@ -173,7 +216,9 @@ export default function HistoryPage() {
                   {getDuration(v.start_time, v.end_time) && (
                     <span className="badge-gray text-[10px]">{getDuration(v.start_time, v.end_time)}</span>
                   )}
-                  {isAdmin && v.profiles?.nome && <span className="badge-blue text-[10px]">{v.profiles.nome}</span>}
+                  {isAdmin && v.profiles?.nome && (
+                    <span className="badge-blue text-[10px]">{v.profiles.nome}</span>
+                  )}
                 </div>
               </div>
 
