@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
 import VisitDetailModal from '../components/visits/VisitDetailModal';
 import ResumeVisitModal from '../components/visits/ResumeVisitModal';
-import generatePDF from '../lib/generatePDF';
 
 const TABS = [
   { id: 'completate', label: '✅ Completate' },
@@ -13,80 +12,72 @@ const TABS = [
   { id: 'cestino', label: '🗑 Cestino' },
 ];
 
-async function fetchWithRetry(queryFn, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    const result = await queryFn();
-    if (!result.error) return result.data || [];
-    if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 600 * (i + 1)));
-  }
-  return null;
-}
-
 export default function HistoryPage({ onVisitClosed }) {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('completate');
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedVisit, setSelectedVisit] = useState(null); // per dettaglio completate
-  const [resumeVisit, setResumeVisit] = useState(null);     // per riprendere visita
+  const [selectedVisit, setSelectedVisit] = useState(null);
+  const [resumeVisit, setResumeVisit] = useState(null);
   const [filterUser, setFilterUser] = useState('');
   const [filterStore, setFilterStore] = useState('');
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+  // Usa un ID di fetch per ignorare risultati di fetch precedenti
+  const fetchIdRef = useRef(0);
 
   const fetchVisits = useCallback(async () => {
     if (!user) return;
+    
+    // Incrementa l'ID di fetch — qualsiasi fetch precedente verrà ignorato
+    const currentFetchId = ++fetchIdRef.current;
     setLoading(true);
+
     try {
-      const visitsData = await fetchWithRetry(() => {
-        let q = supabase
-          .from('visits')
-          .select('*, stores(nome, sede, area)')
-          .order('start_time', { ascending: false });
+      let q = supabase
+        .from('visits')
+        .select('*, stores(nome, sede, area)')
+        .order('start_time', { ascending: false });
 
-        // Filtra per tab
-        if (activeTab === 'cestino') {
-          q = q.not('deleted_at', 'is', null);
-        } else if (activeTab === 'completate') {
-          q = q.is('deleted_at', null).not('end_time', 'is', null);
-        } else {
-          // in-corso: senza end_time
-          q = q.is('deleted_at', null).is('end_time', null);
-        }
+      if (activeTab === 'cestino') {
+        q = q.not('deleted_at', 'is', null);
+      } else if (activeTab === 'completate') {
+        q = q.is('deleted_at', null).not('end_time', 'is', null);
+      } else {
+        q = q.is('deleted_at', null).is('end_time', null);
+      }
 
-        if (!isAdmin) q = q.eq('user_id', user.id);
-        else {
-          if (filterUser) q = q.eq('user_id', filterUser);
-          if (filterStore) q = q.eq('store_id', filterStore);
-        }
-        return q;
-      });
+      if (!isAdmin) q = q.eq('user_id', user.id);
+      else {
+        if (filterUser) q = q.eq('user_id', filterUser);
+        if (filterStore) q = q.eq('store_id', filterStore);
+      }
 
-      if (!mountedRef.current) return;
-      if (visitsData === null) { setLoading(false); return; }
+      const { data: visitsData, error } = await q;
 
-      if (isAdmin && visitsData.length > 0) {
+      // Se nel frattempo è partita una fetch più recente, ignora questo risultato
+      if (currentFetchId !== fetchIdRef.current) return;
+
+      if (error) throw error;
+
+      if (isAdmin && visitsData?.length > 0) {
         const userIds = [...new Set(visitsData.map(v => v.user_id))];
-        const profilesData = await fetchWithRetry(() =>
-          supabase.from('profiles').select('id, nome').in('id', userIds)
-        );
-        if (!mountedRef.current) return;
+        const { data: profilesData } = await supabase
+          .from('profiles').select('id, nome').in('id', userIds);
+
+        if (currentFetchId !== fetchIdRef.current) return;
+
         const profilesMap = {};
         (profilesData || []).forEach(p => { profilesMap[p.id] = p; });
         setVisits(visitsData.map(v => ({ ...v, profiles: profilesMap[v.user_id] || null })));
       } else {
-        setVisits(visitsData);
+        setVisits(visitsData || []);
       }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
+      if (currentFetchId === fetchIdRef.current) setVisits([]);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (currentFetchId === fetchIdRef.current) setLoading(false);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
@@ -143,10 +134,10 @@ export default function HistoryPage({ onVisitClosed }) {
   return (
     <div className="flex flex-col">
       {/* Tab navigazione */}
-      <div className="flex bg-slate-50 border-b border-slate-100 overflow-x-auto">
+      <div className="flex bg-slate-50 border-b border-slate-100">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex-1 py-3 px-2 text-xs font-semibold whitespace-nowrap transition-colors
+            className={`flex-1 py-3 px-1 text-xs font-semibold whitespace-nowrap transition-colors
               ${activeTab === t.id ? 'text-blue-700 border-b-2 border-blue-700 bg-white' : 'text-slate-500'}`}>
             {t.label}
           </button>
@@ -172,7 +163,7 @@ export default function HistoryPage({ onVisitClosed }) {
         </div>
       )}
 
-      {/* Loading overlay */}
+      {/* Loading */}
       {loading && visits.length === 0 && (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       )}
@@ -201,7 +192,6 @@ export default function HistoryPage({ onVisitClosed }) {
         <div className="divide-y divide-slate-100">
           {visits.map(v => (
             <div key={v.id} className="flex items-center px-4 py-3.5 gap-3 bg-white active:bg-slate-50">
-              {/* Icona stato */}
               <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
                 ${activeTab === 'cestino' ? 'bg-red-100' : activeTab === 'completate' ? 'bg-emerald-100' : 'bg-amber-100'}`}>
                 {activeTab === 'cestino' ? (
@@ -220,7 +210,6 @@ export default function HistoryPage({ onVisitClosed }) {
                 )}
               </div>
 
-              {/* Contenuto — cliccabile */}
               <div className="flex-1 min-w-0 cursor-pointer"
                 onClick={() => {
                   if (activeTab === 'completate') setSelectedVisit(v);
@@ -238,44 +227,27 @@ export default function HistoryPage({ onVisitClosed }) {
                   {isAdmin && v.profiles?.nome && (
                     <span className="badge-blue text-[10px]">{v.profiles.nome}</span>
                   )}
-                  {activeTab === 'in-corso' && (
-                    <span className="badge bg-amber-100 text-amber-700 text-[10px]">In corso</span>
-                  )}
                 </div>
               </div>
 
-              {/* Azioni */}
               <div className="flex gap-1 flex-shrink-0">
                 {activeTab === 'completate' && (
-                  <>
-                    {/* PDF diretto */}
-                    <button
-                      onClick={() => generatePDF(v, [], v.stores?.nome, v.profiles?.nome)}
-                      className="p-2 text-slate-400 active:text-blue-600"
-                      title="Genera PDF">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                        <polyline points="14,2 14,8 20,8"/>
-                      </svg>
-                    </button>
-                    {/* Cestino */}
-                    <button onClick={() => softDelete(v.id)} className="p-2 text-slate-400 active:text-red-500" title="Sposta nel cestino">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
-                      </svg>
-                    </button>
-                  </>
+                  <button onClick={() => softDelete(v.id)}
+                    className="p-2 text-slate-400 active:text-red-500" title="Sposta nel cestino">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
+                    </svg>
+                  </button>
                 )}
 
                 {activeTab === 'in-corso' && (
                   <>
-                    {/* Riprendi */}
                     <button onClick={() => setResumeVisit(v)}
                       className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-xl text-xs font-semibold active:bg-amber-200">
                       Riprendi
                     </button>
-                    {/* Cestino */}
-                    <button onClick={() => softDelete(v.id)} className="p-2 text-slate-400 active:text-red-500" title="Sposta nel cestino">
+                    <button onClick={() => softDelete(v.id)}
+                      className="p-2 text-slate-400 active:text-red-500" title="Sposta nel cestino">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
                       </svg>
@@ -285,13 +257,15 @@ export default function HistoryPage({ onVisitClosed }) {
 
                 {activeTab === 'cestino' && (
                   <>
-                    <button onClick={() => restore(v.id)} className="p-2 text-slate-400 active:text-emerald-600" title="Ripristina">
+                    <button onClick={() => restore(v.id)}
+                      className="p-2 text-slate-400 active:text-emerald-600" title="Ripristina">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
                       </svg>
                     </button>
                     {isAdmin && (
-                      <button onClick={() => hardDelete(v.id)} className="p-2 text-red-400 active:text-red-600" title="Elimina definitivamente">
+                      <button onClick={() => hardDelete(v.id)}
+                        className="p-2 text-red-400 active:text-red-600" title="Elimina definitivamente">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
                           <path d="M10,11v6m4-6v6"/><path d="M9,6V4h6v2"/>
@@ -306,7 +280,6 @@ export default function HistoryPage({ onVisitClosed }) {
         </div>
       )}
 
-      {/* Modal dettaglio visita completata */}
       {selectedVisit && (
         <VisitDetailModal
           visitId={selectedVisit.id}
@@ -315,7 +288,6 @@ export default function HistoryPage({ onVisitClosed }) {
         />
       )}
 
-      {/* Modal ripresa visita in corso */}
       {resumeVisit && (
         <ResumeVisitModal
           visit={resumeVisit}
