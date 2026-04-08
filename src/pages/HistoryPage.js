@@ -1,5 +1,5 @@
 // src/pages/HistoryPage.js
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
@@ -20,7 +20,6 @@ export default function HistoryPage() {
   const [filterStore, setFilterStore] = useState('');
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
-  const initializedRef = useRef(false);
 
   const fetchVisits = useCallback(async () => {
     if (!user) return;
@@ -60,19 +59,9 @@ export default function HistoryPage() {
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
-  // Carica solo se non ancora inizializzato
   useEffect(() => {
-    if (authLoading || !user) return;
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    fetchVisits();
+    if (!authLoading && user) fetchVisits();
   }, [authLoading, user, fetchVisits]);
-
-  // Ricarica quando cambiano filtri o tab cestino/visite
-  useEffect(() => {
-    if (!initializedRef.current) return;
-    fetchVisits();
-  }, [activeTab, filterUser, filterStore]); // eslint-disable-line
 
   useEffect(() => {
     if (!isAdmin || authLoading) return;
