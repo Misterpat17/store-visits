@@ -7,7 +7,7 @@ import Spinner from '../components/shared/Spinner';
 import ActivityRow from '../components/visits/ActivityRow';
 import generatePDF from '../lib/generatePDF';
 
-export default function NewVisitPage() {
+export default function NewVisitPage({ onVisitClosed }) {
   const { user, profile, loading: authLoading } = useAuth();
   const { stores, refetch: refetchStores } = useStores(true);
   const { activities, refetch: refetchActivities } = useActivities(true);
@@ -20,7 +20,6 @@ export default function NewVisitPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Raggruppa store per area
   const storesByArea = stores.reduce((acc, s) => {
     const area = s.area || 'ALTRO';
     if (!acc[area]) acc[area] = [];
@@ -28,7 +27,6 @@ export default function NewVisitPage() {
     return acc;
   }, {});
 
-  // Raggruppa visit_activities per area
   const activitiesByArea = visitActivities.reduce((acc, va) => {
     const area = va.activities?.area || 'ALTRO';
     if (!acc[area]) acc[area] = [];
@@ -125,6 +123,9 @@ export default function NewVisitPage() {
     setVisit(prev => ({ ...prev, end_time: endTime }));
     setPhase('closed');
     setSaving(false);
+    // Notifica App.js che una visita è stata conclusa
+    // così tutti gli altri tab si aggiornano
+    if (onVisitClosed) onVisitClosed();
   };
 
   const resetVisit = async () => {
