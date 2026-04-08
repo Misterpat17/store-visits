@@ -15,12 +15,15 @@ import './index.css';
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
+  const [refreshKeys, setRefreshKeys] = useState({
+    home: 0,
+    storico: 0,
+    dashboard: 0,
+    'store-stats': 0,
+  });
+  // NewVisitPage NON si rimonta mai automaticamente — solo quando
+  // l'utente clicca esplicitamente "Inizia nuova visita"
   const [visitKey, setVisitKey] = useState(0);
-  // Chiavi di refresh per i tab che devono ricaricare i dati
-  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
-  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
-  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
-  const [storeStatsRefreshKey, setStoreStatsRefreshKey] = useState(0);
   const prevUserRef = useRef(null);
 
   useEffect(() => {
@@ -32,18 +35,24 @@ function AppContent() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    if (tab === 'nuova-visita') {
-      setVisitKey(prev => prev + 1);
-    }
+    // NON rimontare nulla al cambio tab — i componenti mantengono il loro stato
   };
 
-  // Chiamato da NewVisitPage quando una visita viene conclusa
-  // Forza il refresh di tutti i tab che mostrano dati sulle visite
+  // Chiamato da NewVisitPage dopo "Concludi visita"
+  // Rimonta solo i tab che devono mostrare i nuovi dati
   const handleVisitClosed = useCallback(() => {
-    setHistoryRefreshKey(prev => prev + 1);
-    setHomeRefreshKey(prev => prev + 1);
-    setDashboardRefreshKey(prev => prev + 1);
-    setStoreStatsRefreshKey(prev => prev + 1);
+    setRefreshKeys(prev => ({
+      home: prev.home + 1,
+      storico: prev.storico + 1,
+      dashboard: prev.dashboard + 1,
+      'store-stats': prev['store-stats'] + 1,
+    }));
+  }, []);
+
+  // Chiamato da NewVisitPage dopo "Inizia nuova visita"
+  // Rimonta solo NewVisitPage per ripartire da zero
+  const handleVisitReset = useCallback(() => {
+    setVisitKey(prev => prev + 1);
   }, []);
 
   if (loading) {
@@ -86,20 +95,25 @@ function AppContent() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
+        {/* Tutti i tab montati una sola volta, nascosti con CSS */}
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
-          <HomePage key={homeRefreshKey} onNavigate={handleTabChange} />
+          <HomePage key={refreshKeys.home} onNavigate={handleTabChange} />
         </div>
         <div style={{ display: activeTab === 'nuova-visita' ? 'block' : 'none' }}>
-          <NewVisitPage key={visitKey} onVisitClosed={handleVisitClosed} />
+          <NewVisitPage
+            key={visitKey}
+            onVisitClosed={handleVisitClosed}
+            onVisitReset={handleVisitReset}
+          />
         </div>
         <div style={{ display: activeTab === 'storico' ? 'block' : 'none' }}>
-          <HistoryPage key={historyRefreshKey} />
+          <HistoryPage key={refreshKeys.storico} />
         </div>
         <div style={{ display: activeTab === 'store-stats' ? 'block' : 'none' }}>
-          <StoreStatsPage key={storeStatsRefreshKey} />
+          <StoreStatsPage key={refreshKeys['store-stats']} />
         </div>
         <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
-          <DashboardPage key={dashboardRefreshKey} />
+          <DashboardPage key={refreshKeys.dashboard} />
         </div>
         <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
           <AdminPage />
