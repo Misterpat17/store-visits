@@ -1,5 +1,5 @@
 // src/App.js
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
@@ -15,11 +15,14 @@ import './index.css';
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
-  // Key usata SOLO per NewVisitPage — deve sempre ripartire da zero
   const [visitKey, setVisitKey] = useState(0);
+  // Chiavi di refresh per i tab che devono ricaricare i dati
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [storeStatsRefreshKey, setStoreStatsRefreshKey] = useState(0);
   const prevUserRef = useRef(null);
 
-  // Reset alla home solo al login (da null a utente)
   useEffect(() => {
     if (user && !prevUserRef.current) {
       setActiveTab('home');
@@ -29,11 +32,19 @@ function AppContent() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    // Rimonta NewVisitPage solo quando si torna su quel tab
     if (tab === 'nuova-visita') {
       setVisitKey(prev => prev + 1);
     }
   };
+
+  // Chiamato da NewVisitPage quando una visita viene conclusa
+  // Forza il refresh di tutti i tab che mostrano dati sulle visite
+  const handleVisitClosed = useCallback(() => {
+    setHistoryRefreshKey(prev => prev + 1);
+    setHomeRefreshKey(prev => prev + 1);
+    setDashboardRefreshKey(prev => prev + 1);
+    setStoreStatsRefreshKey(prev => prev + 1);
+  }, []);
 
   if (loading) {
     return (
@@ -74,26 +85,21 @@ function AppContent() {
         </div>
       </header>
 
-      {/* 
-        I tab vengono mostrati/nascosti con CSS invece di essere rimontati.
-        Questo evita la rotellina ogni volta che si cambia tab.
-        Solo NewVisitPage usa una key per rimontarsi quando si torna su quel tab.
-      */}
       <main className="flex-1 overflow-y-auto pb-24">
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
-          <HomePage onNavigate={handleTabChange} />
+          <HomePage key={homeRefreshKey} onNavigate={handleTabChange} />
         </div>
         <div style={{ display: activeTab === 'nuova-visita' ? 'block' : 'none' }}>
-          <NewVisitPage key={visitKey} />
+          <NewVisitPage key={visitKey} onVisitClosed={handleVisitClosed} />
         </div>
         <div style={{ display: activeTab === 'storico' ? 'block' : 'none' }}>
-          <HistoryPage />
+          <HistoryPage key={historyRefreshKey} />
         </div>
         <div style={{ display: activeTab === 'store-stats' ? 'block' : 'none' }}>
-          <StoreStatsPage />
+          <StoreStatsPage key={storeStatsRefreshKey} />
         </div>
         <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
-          <DashboardPage />
+          <DashboardPage key={dashboardRefreshKey} />
         </div>
         <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
           <AdminPage />
