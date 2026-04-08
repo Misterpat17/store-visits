@@ -1,4 +1,5 @@
 // src/components/visits/ActivityRow.js
+// Foto multiple per attività, nessun file
 import { useState, useRef } from 'react';
 
 export default function ActivityRow({
@@ -19,21 +20,17 @@ export default function ActivityRow({
     e.target.value = '';
   };
 
-  const isImage = (type) => type?.startsWith('image/');
+  const photos = (va.attachments || []).filter(a => a.file_type?.startsWith('image/'));
 
   return (
     <div className={`bg-white transition-colors ${va.completed ? 'bg-emerald-50/40' : ''}`}>
       {/* Riga principale */}
       <div className="flex items-center px-4 py-3 gap-3">
-        {/* Checkbox */}
         <button
           disabled={readonly}
           onClick={() => onToggle(!va.completed)}
           className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all
-            ${va.completed
-              ? 'bg-emerald-500 border-emerald-500'
-              : 'border-slate-300 active:border-primary-400'
-            }
+            ${va.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 active:border-blue-400'}
             ${readonly ? 'opacity-70 cursor-default' : ''}`}
         >
           {va.completed && (
@@ -43,7 +40,6 @@ export default function ActivityRow({
           )}
         </button>
 
-        {/* Titolo attività */}
         <div className="flex-1 min-w-0" onClick={() => setExpanded(!expanded)}>
           <p className={`font-medium text-sm leading-snug ${va.completed ? 'text-emerald-700 line-through' : 'text-slate-800'}`}>
             {va.activities?.titolo}
@@ -51,22 +47,14 @@ export default function ActivityRow({
           {va.activities?.descrizione && (
             <p className="text-xs text-slate-400 mt-0.5 truncate">{va.activities.descrizione}</p>
           )}
-          {/* Badge allegati/note */}
           <div className="flex gap-1.5 mt-1 flex-wrap">
-            {va.notes && (
-              <span className="badge-blue text-[10px]">📝 nota</span>
-            )}
-            {va.attachments?.length > 0 && (
-              <span className="badge-blue text-[10px]">📎 {va.attachments.length}</span>
-            )}
+            {va.notes && <span className="badge-blue text-[10px]">📝 nota</span>}
+            {photos.length > 0 && <span className="badge-blue text-[10px]">📷 {photos.length}</span>}
           </div>
         </div>
 
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex-shrink-0 p-1.5 text-slate-400 active:text-slate-600"
-        >
+        <button onClick={() => setExpanded(!expanded)}
+          className="flex-shrink-0 p-1.5 text-slate-400 active:text-slate-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
             <polyline points="6,9 12,15 18,9"/>
@@ -77,7 +65,7 @@ export default function ActivityRow({
       {/* Sezione espansa */}
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3 border-t border-slate-50">
-          {/* Campo note */}
+          {/* Note */}
           <div className="pt-3">
             <label className="section-title">Note</label>
             <textarea
@@ -91,79 +79,61 @@ export default function ActivityRow({
             />
           </div>
 
-          {/* Allegati */}
+          {/* Foto */}
           <div>
-            <label className="section-title">Allegati ({va.attachments?.length || 0})</label>
+            <label className="section-title">Foto ({photos.length})</label>
 
-            {/* Lista allegati esistenti */}
-            {va.attachments?.length > 0 && (
+            {photos.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-3">
-                {va.attachments.map(att => (
+                {photos.map(att => (
                   <div key={att.id} className="relative group">
-                    {isImage(att.file_type) ? (
-                      <a href={att.file_url} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={att.file_url}
-                          alt={att.file_name}
-                          className="w-20 h-20 object-cover rounded-xl border border-slate-200"
-                        />
-                      </a>
-                    ) : (
-                      <a
-                        href={att.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 text-xs text-slate-700 font-medium max-w-[140px]"
-                      >
-                        <span>📄</span>
-                        <span className="truncate">{att.file_name}</span>
-                      </a>
-                    )}
-                    {/* Bottone elimina */}
+                    <a href={att.file_url} target="_blank" rel="noopener noreferrer">
+                      <img src={att.file_url} alt={att.file_name}
+                        className="w-20 h-20 object-cover rounded-xl border border-slate-200" />
+                    </a>
                     {!readonly && (
                       <button
                         onClick={() => onDeleteAttachment(att.id)}
                         className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full
                           text-xs flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100
                           active:opacity-100 transition-opacity"
-                      >
-                        ×
-                      </button>
+                      >×</button>
                     )}
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Pulsante aggiungi allegato */}
             {!readonly && (
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2 text-primary-600 text-sm font-medium
-                  bg-primary-50 rounded-xl px-4 py-2.5 active:bg-primary-100 transition-colors
+                className="flex items-center gap-2 text-blue-600 text-sm font-medium
+                  bg-blue-50 rounded-xl px-4 py-2.5 active:bg-blue-100 transition-colors
                   disabled:opacity-50 w-full justify-center"
               >
                 {uploading ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"/>
+                    <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>
                     Caricamento...
                   </>
                 ) : (
                   <>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                      <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
                     </svg>
-                    Aggiungi foto o file
+                    Aggiungi foto
                   </>
                 )}
               </button>
             )}
 
+            {/* Solo immagini, multiple */}
             <input
               ref={fileRef}
               type="file"
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              accept="image/*"
               multiple
               capture="environment"
               className="hidden"
