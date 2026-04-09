@@ -35,7 +35,6 @@ function AppContent() {
     setActiveTab(tab);
   };
 
-  // Chiamato quando una visita viene conclusa (da NewVisitPage o ResumeVisitModal)
   const handleVisitClosed = useCallback(() => {
     setRefreshKeys(prev => ({
       home: prev.home + 1,
@@ -45,7 +44,6 @@ function AppContent() {
     }));
   }, []);
 
-  // Chiamato quando l'utente clicca "Inizia nuova visita"
   const handleVisitReset = useCallback(() => {
     setVisitKey(prev => prev + 1);
   }, []);
@@ -90,7 +88,6 @@ function AppContent() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
-        {/* display:none mantiene i componenti montati evitando rimount al cambio tab */}
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
           <HomePage key={refreshKeys.home} onNavigate={handleTabChange} />
         </div>
