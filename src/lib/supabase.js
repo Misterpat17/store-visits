@@ -13,8 +13,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    // Chiave storage univoca per evitare conflitti tra tab
-    storageKey: 'bruno-store-check-auth',
   },
 });
 
