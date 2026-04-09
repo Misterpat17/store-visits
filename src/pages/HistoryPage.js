@@ -13,9 +13,6 @@ const TABS = [
   { id: 'cestino', label: '🗑 Cestino' },
 ];
 
-// Ricarica dati solo se è passato più di 30 secondi dall'ultimo fetch
-const REFRESH_THRESHOLD_MS = 30 * 1000;
-
 export default function HistoryPage({ onVisitClosed }) {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('completate');
@@ -28,16 +25,19 @@ export default function HistoryPage({ onVisitClosed }) {
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
   const fetchIdRef = useRef(0);
-  const lastFetchAtRef = useRef(0);
 
-  const fetchVisits = useCallback(async (force = false) => {
+  const fetchVisits = useCallback(async () => {
     if (!user) return;
-
-    // Non ricaricare se i dati sono freschi e non è un fetch forzato
-    const now = Date.now();
-    if (!force && (now - lastFetchAtRef.current) < REFRESH_THRESHOLD_MS) return;
-
     const currentFetchId = ++fetchIdRef.current;
+
+    // Timeout di sicurezza: se la query non completa in 8 secondi, 
+    // rimuoviamo la rotellina mantenendo i dati esistenti
+    const safetyTimer = setTimeout(() => {
+      if (currentFetchId === fetchIdRef.current) {
+        setLoading(false);
+      }
+    }, 8000);
+
     setLoading(true);
     try {
       let q = supabase
@@ -59,8 +59,6 @@ export default function HistoryPage({ onVisitClosed }) {
       if (currentFetchId !== fetchIdRef.current) return;
       if (error) throw error;
 
-      lastFetchAtRef.current = Date.now();
-
       if (isAdmin && visitsData?.length > 0) {
         const userIds = [...new Set(visitsData.map(v => v.user_id))];
         const { data: profilesData } = await supabase
@@ -74,22 +72,20 @@ export default function HistoryPage({ onVisitClosed }) {
       }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
+      // Non azzerare i dati in caso di errore
     } finally {
+      clearTimeout(safetyTimer);
       if (currentFetchId === fetchIdRef.current) setLoading(false);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
-  // Al mount e quando cambiano filtri/tab: fetch forzato
   useEffect(() => {
-    if (!authLoading && user) fetchVisits(true);
+    if (!authLoading && user) fetchVisits();
   }, [authLoading, user, fetchVisits]);
 
-  // Al SESSION_READY_EVENT: fetch non forzato (rispetta il threshold)
-  useEffect(() => {
-    const handler = () => { if (user) fetchVisits(false); };
-    window.addEventListener(SESSION_READY_EVENT, handler);
-    return () => window.removeEventListener(SESSION_READY_EVENT, handler);
-  }, [fetchVisits, user]);
+  // Quando torna visibile dopo cambio scheda: NON ricaricare,
+  // lascia i dati esistenti. L'utente può cambiare tab per forzare il refresh.
+  // SESSION_READY_EVENT viene ignorato qui per evitare la rotellina infinita.
 
   useEffect(() => {
     if (!isAdmin || authLoading) return;
@@ -100,27 +96,23 @@ export default function HistoryPage({ onVisitClosed }) {
   const softDelete = async (visitId) => {
     if (!window.confirm('Spostare questa visita nel cestino?')) return;
     await supabase.from('visits').update({ deleted_at: new Date().toISOString() }).eq('id', visitId);
-    lastFetchAtRef.current = 0; // forza refresh
-    fetchVisits(true);
+    fetchVisits();
   };
 
   const restore = async (visitId) => {
     await supabase.from('visits').update({ deleted_at: null }).eq('id', visitId);
-    lastFetchAtRef.current = 0;
-    fetchVisits(true);
+    fetchVisits();
   };
 
   const hardDelete = async (visitId) => {
     if (!window.confirm('Eliminare definitivamente? Operazione non reversibile.')) return;
     await supabase.from('visits').delete().eq('id', visitId);
-    lastFetchAtRef.current = 0;
-    fetchVisits(true);
+    fetchVisits();
   };
 
   const handleVisitClosedFromModal = () => {
     setResumeVisit(null);
-    lastFetchAtRef.current = 0;
-    fetchVisits(true);
+    fetchVisits();
     if (onVisitClosed) onVisitClosed();
   };
 
@@ -173,12 +165,6 @@ export default function HistoryPage({ onVisitClosed }) {
 
       {loading && visits.length === 0 && (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      )}
-      {loading && visits.length > 0 && (
-        <div className="flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-600 text-xs font-medium">
-          <Spinner size="sm" color="primary" />
-          Aggiornamento in corso...
-        </div>
       )}
 
       {!loading && visits.length === 0 && (
