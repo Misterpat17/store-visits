@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { SESSION_READY_EVENT } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
 import VisitDetailModal from '../components/visits/VisitDetailModal';
 import ResumeVisitModal from '../components/visits/ResumeVisitModal';
