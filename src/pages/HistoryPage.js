@@ -24,19 +24,11 @@ export default function HistoryPage({ onVisitClosed }) {
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
   const fetchIdRef = useRef(0);
+  const hiddenAtRef = useRef(null);
 
   const fetchVisits = useCallback(async () => {
     if (!user) return;
     const currentFetchId = ++fetchIdRef.current;
-
-    // Timeout di sicurezza: se la query non completa in 8 secondi, 
-    // rimuoviamo la rotellina mantenendo i dati esistenti
-    const safetyTimer = setTimeout(() => {
-      if (currentFetchId === fetchIdRef.current) {
-        setLoading(false);
-      }
-    }, 8000);
-
     setLoading(true);
     try {
       let q = supabase
@@ -71,9 +63,8 @@ export default function HistoryPage({ onVisitClosed }) {
       }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
-      // Non azzerare i dati in caso di errore
+      // Non azzerare i dati esistenti in caso di errore
     } finally {
-      clearTimeout(safetyTimer);
       if (currentFetchId === fetchIdRef.current) setLoading(false);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
@@ -82,9 +73,22 @@ export default function HistoryPage({ onVisitClosed }) {
     if (!authLoading && user) fetchVisits();
   }, [authLoading, user, fetchVisits]);
 
-  // Quando torna visibile dopo cambio scheda: NON ricaricare,
-  // lascia i dati esistenti. L'utente può cambiare tab per forzare il refresh.
-  // SESSION_READY_EVENT viene ignorato qui per evitare la rotellina infinita.
+  // Ricarica dopo sblocco schermo (stesso pattern di HomePage)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+      } else {
+        const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+        hiddenAtRef.current = null;
+        // Ricarica sempre quando lo schermo si sblocca
+        // (anche dopo pochi secondi, perché Supabase perde il lock)
+        if (hiddenFor > 1000 && user) fetchVisits();
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [fetchVisits, user]);
 
   useEffect(() => {
     if (!isAdmin || authLoading) return;
@@ -164,6 +168,12 @@ export default function HistoryPage({ onVisitClosed }) {
 
       {loading && visits.length === 0 && (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+      )}
+      {loading && visits.length > 0 && (
+        <div className="flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-600 text-xs font-medium">
+          <Spinner size="sm" color="primary" />
+          Aggiornamento in corso...
+        </div>
       )}
 
       {!loading && visits.length === 0 && (
