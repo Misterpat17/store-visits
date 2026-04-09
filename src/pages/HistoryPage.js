@@ -13,6 +13,9 @@ const TABS = [
   { id: 'cestino', label: '🗑 Cestino' },
 ];
 
+// Ricarica dati solo se è passato più di 30 secondi dall'ultimo fetch
+const REFRESH_THRESHOLD_MS = 30 * 1000;
+
 export default function HistoryPage({ onVisitClosed }) {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('completate');
@@ -25,9 +28,15 @@ export default function HistoryPage({ onVisitClosed }) {
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
   const fetchIdRef = useRef(0);
+  const lastFetchAtRef = useRef(0);
 
-  const fetchVisits = useCallback(async () => {
+  const fetchVisits = useCallback(async (force = false) => {
     if (!user) return;
+
+    // Non ricaricare se i dati sono freschi e non è un fetch forzato
+    const now = Date.now();
+    if (!force && (now - lastFetchAtRef.current) < REFRESH_THRESHOLD_MS) return;
+
     const currentFetchId = ++fetchIdRef.current;
     setLoading(true);
     try {
@@ -50,6 +59,8 @@ export default function HistoryPage({ onVisitClosed }) {
       if (currentFetchId !== fetchIdRef.current) return;
       if (error) throw error;
 
+      lastFetchAtRef.current = Date.now();
+
       if (isAdmin && visitsData?.length > 0) {
         const userIds = [...new Set(visitsData.map(v => v.user_id))];
         const { data: profilesData } = await supabase
@@ -63,28 +74,23 @@ export default function HistoryPage({ onVisitClosed }) {
       }
     } catch (err) {
       console.error('Errore caricamento visite:', err);
-      // Non azzerare i dati esistenti in caso di errore
     } finally {
       if (currentFetchId === fetchIdRef.current) setLoading(false);
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
-  // Carica dati al mount e quando cambiano i filtri
+  // Al mount e quando cambiano filtri/tab: fetch forzato
   useEffect(() => {
-    if (!authLoading && user) fetchVisits();
+    if (!authLoading && user) fetchVisits(true);
   }, [authLoading, user, fetchVisits]);
 
-  // Ricarica quando la sessione è confermata valida dopo sblocco schermo/cambio scheda
-  // SESSION_READY_EVENT viene emesso da AuthContext dopo getSession()
+  // Al SESSION_READY_EVENT: fetch non forzato (rispetta il threshold)
   useEffect(() => {
-    const handler = () => {
-      if (user) fetchVisits();
-    };
+    const handler = () => { if (user) fetchVisits(false); };
     window.addEventListener(SESSION_READY_EVENT, handler);
     return () => window.removeEventListener(SESSION_READY_EVENT, handler);
   }, [fetchVisits, user]);
 
-  // Carica lista utenti e store per i filtri admin
   useEffect(() => {
     if (!isAdmin || authLoading) return;
     supabase.from('profiles').select('id, nome').then(({ data }) => setAllUsers(data || []));
@@ -94,23 +100,27 @@ export default function HistoryPage({ onVisitClosed }) {
   const softDelete = async (visitId) => {
     if (!window.confirm('Spostare questa visita nel cestino?')) return;
     await supabase.from('visits').update({ deleted_at: new Date().toISOString() }).eq('id', visitId);
-    fetchVisits();
+    lastFetchAtRef.current = 0; // forza refresh
+    fetchVisits(true);
   };
 
   const restore = async (visitId) => {
     await supabase.from('visits').update({ deleted_at: null }).eq('id', visitId);
-    fetchVisits();
+    lastFetchAtRef.current = 0;
+    fetchVisits(true);
   };
 
   const hardDelete = async (visitId) => {
     if (!window.confirm('Eliminare definitivamente? Operazione non reversibile.')) return;
     await supabase.from('visits').delete().eq('id', visitId);
-    fetchVisits();
+    lastFetchAtRef.current = 0;
+    fetchVisits(true);
   };
 
   const handleVisitClosedFromModal = () => {
     setResumeVisit(null);
-    fetchVisits();
+    lastFetchAtRef.current = 0;
+    fetchVisits(true);
     if (onVisitClosed) onVisitClosed();
   };
 
