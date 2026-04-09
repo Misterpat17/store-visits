@@ -28,9 +28,7 @@ export default function HomePage({ onNavigate }) {
       if (last3.length > 0) {
         const storeIds = [...new Set(last3.map(v => v.store_id))];
         const { data: stores } = await supabase
-          .from('stores')
-          .select('id, nome')
-          .in('id', storeIds);
+          .from('stores').select('id, nome').in('id', storeIds);
         const storeMap = {};
         (stores || []).forEach(s => { storeMap[s.id] = s.nome; });
         setRecentVisits(last3.map(v => ({ ...v, storeName: storeMap[v.store_id] || '—' })));
@@ -71,70 +69,29 @@ export default function HomePage({ onNavigate }) {
 
   const actions = [
     {
-      id: 'nuova-visita',
-      label: 'Nuova visita',
-      desc: 'Avvia una visita in store',
-      color: 'bg-blue-700',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/>
-          <polygon points="10,8 16,12 10,16"/>
-        </svg>
-      ),
+      id: 'nuova-visita', label: 'Nuova visita', desc: 'Avvia una visita in store', color: 'bg-blue-700',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg>,
     },
     {
-      id: 'storico',
-      label: 'Storico visite',
-      desc: 'Consulta le visite passate',
-      color: 'bg-slate-700',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-          <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      ),
+      id: 'storico', label: 'Storico visite', desc: 'Consulta le visite passate', color: 'bg-slate-700',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
     },
     {
-      id: 'store-stats',
-      label: 'Store',
-      desc: 'Visite per store',
-      color: 'bg-indigo-600',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-          <polyline points="9,22 9,12 15,12 15,22"/>
-        </svg>
-      ),
+      id: 'store-stats', label: 'Store', desc: 'Visite per store', color: 'bg-indigo-600',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>,
     },
     {
-      id: 'dashboard',
-      label: 'Dashboard',
-      desc: 'Statistiche e performance',
-      color: 'bg-emerald-700',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-          <rect x="2" y="3" width="6" height="8" rx="1"/>
-          <rect x="10" y="3" width="12" height="5" rx="1"/>
-          <rect x="10" y="12" width="12" height="9" rx="1"/>
-          <rect x="2" y="15" width="6" height="6" rx="1"/>
-        </svg>
-      ),
+      id: 'dashboard', label: 'Dashboard', desc: 'Statistiche e performance', color: 'bg-emerald-700',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="2" y="3" width="6" height="8" rx="1"/><rect x="10" y="3" width="12" height="5" rx="1"/><rect x="10" y="12" width="12" height="9" rx="1"/><rect x="2" y="15" width="6" height="6" rx="1"/></svg>,
     },
     ...(isAdmin ? [{
-      id: 'admin',
-      label: 'Amministrazione',
-      desc: 'Gestisci utenti, store e attività',
-      color: 'bg-amber-600',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      ),
+      id: 'admin', label: 'Amministrazione', desc: 'Gestisci utenti, store e attività', color: 'bg-amber-600',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     }] : []),
   ];
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      {/* Benvenuto */}
       <div className="bg-blue-800 rounded-2xl p-5 text-white">
         <div className="flex items-start justify-between">
           <div>
@@ -145,11 +102,8 @@ export default function HomePage({ onNavigate }) {
               {isAdmin ? '🛡 Amministratore' : '👤 Utente'}
             </span>
           </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30
-              px-3 py-2 rounded-xl text-xs font-semibold text-white transition-colors"
-          >
+          <button onClick={logout}
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
               <polyline points="16,17 21,12 16,7"/>
@@ -160,27 +114,19 @@ export default function HomePage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Statistiche — sempre visibili, partono da 0 e si aggiornano */}
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Visite totali" value={stats.totalVisite} icon="📋" />
         <StatCard label="Store visitati" value={stats.storeVisitati} icon="🏪" />
         <StatCard label="Completate" value={stats.visteCompletate} icon="✅" />
       </div>
 
-      {/* Azioni principali */}
       <div>
         <p className="section-title">Cosa vuoi fare?</p>
         <div className="grid grid-cols-2 gap-3">
           {actions.map(action => (
-            <button
-              key={action.id}
-              onClick={() => onNavigate(action.id)}
-              className={`${action.color} rounded-2xl p-4 text-left text-white
-                active:opacity-80 transition-opacity flex flex-col gap-3`}
-            >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                {action.icon}
-              </div>
+            <button key={action.id} onClick={() => onNavigate(action.id)}
+              className={`${action.color} rounded-2xl p-4 text-left text-white active:opacity-80 transition-opacity flex flex-col gap-3`}>
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">{action.icon}</div>
               <div>
                 <p className="font-bold text-sm">{action.label}</p>
                 <p className="text-xs opacity-75 mt-0.5">{action.desc}</p>
@@ -190,28 +136,18 @@ export default function HomePage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Ultime visite */}
       {recentVisits.length > 0 && (
         <div>
           <p className="section-title">Ultime visite</p>
           <div className="flex flex-col gap-2">
             {recentVisits.map(v => (
-              <button
-                key={v.id}
-                onClick={() => onNavigate('storico')}
-                className="card flex items-center gap-3 text-left active:bg-slate-50"
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
-                  ${v.end_time ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+              <button key={v.id} onClick={() => onNavigate('storico')}
+                className="card flex items-center gap-3 text-left active:bg-slate-50">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${v.end_time ? 'bg-emerald-100' : 'bg-amber-100'}`}>
                   {v.end_time ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5"><polyline points="20,6 9,17 4,12"/></svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="8" x2="12" y2="12"/>
-                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
