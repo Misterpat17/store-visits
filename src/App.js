@@ -1,7 +1,6 @@
 // src/App.js
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { supabase } from './lib/supabase';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import NewVisitPage from './pages/NewVisitPage';
@@ -12,27 +11,6 @@ import StoreStatsPage from './pages/StoreStatsPage';
 import BottomNav from './components/shared/BottomNav';
 import Spinner from './components/shared/Spinner';
 import './index.css';
-
-// Componente separato che gestisce il refresh sessione globale
-function SessionKeepAlive() {
-  useEffect(() => {
-    const handler = async () => {
-      if (document.visibilityState === 'visible') {
-        // Forza il refresh del token quando la pagina torna visibile
-        // Questo risolve il problema del lock Supabase dopo sblocco schermo
-        try {
-          await supabase.auth.refreshSession();
-        } catch (e) {
-          // Ignora errori — se la sessione è scaduta, onAuthStateChange gestirà il logout
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
-  }, []);
-
-  return null;
-}
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -57,6 +35,7 @@ function AppContent() {
     setActiveTab(tab);
   };
 
+  // Chiamato quando una visita viene conclusa (da NewVisitPage o ResumeVisitModal)
   const handleVisitClosed = useCallback(() => {
     setRefreshKeys(prev => ({
       home: prev.home + 1,
@@ -66,6 +45,7 @@ function AppContent() {
     }));
   }, []);
 
+  // Chiamato quando l'utente clicca "Inizia nuova visita"
   const handleVisitReset = useCallback(() => {
     setVisitKey(prev => prev + 1);
   }, []);
@@ -110,6 +90,7 @@ function AppContent() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
+        {/* display:none mantiene i componenti montati evitando rimount al cambio tab */}
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
           <HomePage key={refreshKeys.home} onNavigate={handleTabChange} />
         </div>
@@ -142,7 +123,6 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <SessionKeepAlive />
       <AppContent />
     </AuthProvider>
   );
