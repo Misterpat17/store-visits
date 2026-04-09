@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { SESSION_READY_EVENT } from '../context/AuthContext';
 import Spinner from '../components/shared/Spinner';
 import VisitDetailModal from '../components/visits/VisitDetailModal';
 import ResumeVisitModal from '../components/visits/ResumeVisitModal';
@@ -24,7 +25,6 @@ export default function HistoryPage({ onVisitClosed }) {
   const [allUsers, setAllUsers] = useState([]);
   const [allStores, setAllStores] = useState([]);
   const fetchIdRef = useRef(0);
-  const hiddenAtRef = useRef(null);
 
   const fetchVisits = useCallback(async () => {
     if (!user) return;
@@ -69,27 +69,22 @@ export default function HistoryPage({ onVisitClosed }) {
     }
   }, [user, isAdmin, filterUser, filterStore, activeTab]);
 
+  // Carica dati al mount e quando cambiano i filtri
   useEffect(() => {
     if (!authLoading && user) fetchVisits();
   }, [authLoading, user, fetchVisits]);
 
-  // Ricarica dopo sblocco schermo (stesso pattern di HomePage)
+  // Ricarica quando la sessione è confermata valida dopo sblocco schermo/cambio scheda
+  // SESSION_READY_EVENT viene emesso da AuthContext dopo getSession()
   useEffect(() => {
     const handler = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAtRef.current = Date.now();
-      } else {
-        const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
-        hiddenAtRef.current = null;
-        // Ricarica sempre quando lo schermo si sblocca
-        // (anche dopo pochi secondi, perché Supabase perde il lock)
-        if (hiddenFor > 1000 && user) fetchVisits();
-      }
+      if (user) fetchVisits();
     };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
+    window.addEventListener(SESSION_READY_EVENT, handler);
+    return () => window.removeEventListener(SESSION_READY_EVENT, handler);
   }, [fetchVisits, user]);
 
+  // Carica lista utenti e store per i filtri admin
   useEffect(() => {
     if (!isAdmin || authLoading) return;
     supabase.from('profiles').select('id, nome').then(({ data }) => setAllUsers(data || []));
