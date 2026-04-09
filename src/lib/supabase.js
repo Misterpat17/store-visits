@@ -13,15 +13,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
+    lock: (name, acquireTimeout, fn) => fn(),
   },
 });
 
 export async function uploadAttachment(visitId, activityId, file) {
   const timestamp = Date.now();
   const path = `attachments/${visitId}/${activityId}/${timestamp}_${file.name}`;
-  const { error } = await supabase.storage.from('attachments').upload(path, file, { upsert: false });
+
+  const { error } = await supabase.storage
+    .from('attachments')
+    .upload(path, file, { upsert: false });
+
   if (error) throw error;
-  const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path);
+
+  const { data: urlData } = supabase.storage
+    .from('attachments')
+    .getPublicUrl(path);
+
   return { path, publicUrl: urlData.publicUrl, fileName: file.name, fileType: file.type };
 }
 
