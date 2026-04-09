@@ -1,5 +1,4 @@
 // src/components/visits/GeneralAttachments.js
-// Gestione allegati file (non immagini) nelle note generali
 import { useState, useRef } from 'react';
 
 export default function GeneralAttachments({ attachments, readonly, onUpload, onDelete }) {
@@ -35,7 +34,9 @@ export default function GeneralAttachments({ attachments, readonly, onUpload, on
                 {att.file_name}
               </a>
               {!readonly && (
-                <button onClick={() => onDelete(att.id)}
+                <button
+                  type="button"
+                  onClick={() => onDelete(att.id)}
                   className="text-red-400 active:text-red-600 p-1 flex-shrink-0">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
@@ -50,6 +51,7 @@ export default function GeneralAttachments({ attachments, readonly, onUpload, on
 
       {!readonly && (
         <button
+          type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
           className="flex items-center gap-2 text-slate-600 text-sm font-medium
@@ -72,7 +74,6 @@ export default function GeneralAttachments({ attachments, readonly, onUpload, on
         </button>
       )}
 
-      {/* Solo file non immagine */}
       <input
         ref={fileRef}
         type="file"
