@@ -8,6 +8,8 @@ import ActivityRow from '../components/visits/ActivityRow';
 import GeneralAttachments from '../components/visits/GeneralAttachments';
 import generatePDF from '../lib/generatePDF';
 
+const AREA_ORDER = ['COMMERCIALE','OBSOLETI','ASSISTENZA','FORMAZIONE','VOLANTINO','PROMOZIONE','AREE ESPOSITIVE','ANALISI PERFORMANCE'];
+
 export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
   const { user, profile, loading: authLoading } = useAuth();
   const { stores, refetch: refetchStores } = useStores(true);
@@ -18,7 +20,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
   const [visit, setVisit] = useState(null);
   const [visitActivities, setVisitActivities] = useState([]);
   const [generalNote, setGeneralNote] = useState('');
-  const [generalAttachments, setGeneralAttachments] = useState([]); // file allegati alle note generali
+  const [generalAttachments, setGeneralAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -29,12 +31,20 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     return acc;
   }, {});
 
-  const activitiesByArea = visitActivities.reduce((acc, va) => {
-    const area = va.activities?.area || 'ALTRO';
-    if (!acc[area]) acc[area] = [];
-    acc[area].push(va);
+  // Raggruppa per area rispettando l'ordine fisso
+  const activitiesByArea = AREA_ORDER.reduce((acc, area) => {
+    const acts = visitActivities.filter(va => va.activities?.area === area);
+    if (acts.length > 0) acc[area] = acts;
     return acc;
   }, {});
+  // Aggiungi eventuali aree non in lista
+  visitActivities.forEach(va => {
+    const area = va.activities?.area || 'ALTRO';
+    if (!AREA_ORDER.includes(area)) {
+      if (!activitiesByArea[area]) activitiesByArea[area] = [];
+      activitiesByArea[area].push(va);
+    }
+  });
 
   const startVisit = async () => {
     if (!selectedStore) return;
@@ -53,6 +63,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
         activity_id: a.id,
         completed: false,
         notes: '',
+        rating: null,
       }));
       const { data: createdActs, error: actsErr } = await supabase
         .from('visit_activities')
@@ -87,10 +98,14 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     await supabase.from('visit_activities').update({ notes }).eq('id', vaId);
   };
 
-  // Upload foto per singola attività
+  const updateRating = async (vaId, rating) => {
+    setVisitActivities(prev => prev.map(va => va.id === vaId ? { ...va, rating } : va));
+    await supabase.from('visit_activities').update({ rating }).eq('id', vaId);
+  };
+
   const handlePhotoUpload = async (vaId, files) => {
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue; // solo immagini
+      if (!file.type.startsWith('image/')) continue;
       try {
         setSaving(true);
         const { path, publicUrl, fileName, fileType } = await uploadAttachment(visit.id, vaId, file);
@@ -119,32 +134,18 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     );
   };
 
-  // Upload file allegati alle note generali
-  // Usiamo visit_activity_id = null per indicare allegati generali della visita
-  // Salviamo in una visit_activity fittizia identificata dall'id della visita
   const handleGeneralFileUpload = async (files) => {
     for (const file of Array.from(files)) {
       try {
         setSaving(true);
-        // Usa 'general' come activity_id nel path per distinguerli
         const timestamp = Date.now();
         const path = `attachments/${visit.id}/general/${timestamp}_${file.name}`;
         const { error } = await supabase.storage.from('attachments').upload(path, file, { upsert: false });
         if (error) throw error;
         const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path);
-        // Salva nella tabella visits_files (o riusa attachments con visit_activity_id = null)
-        // Per semplicità usiamo una colonna JSON nella tabella visits
-        // Ma dato che non abbiamo quella colonna, salviamo negli attachments con activity_id speciale
         const { data: att } = await supabase
           .from('attachments')
-          .insert({
-            visit_activity_id: null, // null = allegato generale
-            file_url: urlData.publicUrl,
-            file_path: path,
-            file_name: file.name,
-            file_type: file.type,
-            visit_id: visit.id, // colonna aggiuntiva per filtrare
-          })
+          .insert({ visit_activity_id: null, file_url: urlData.publicUrl, file_path: path, file_name: file.name, file_type: file.type, visit_id: visit.id })
           .select()
           .single();
         setGeneralAttachments(prev => [...prev, att]);
@@ -183,9 +184,7 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
     if (onVisitReset) onVisitReset();
   };
 
-  if (authLoading) {
-    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
-  }
+  if (authLoading) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
 
   const storeName = stores.find(s => s.id === selectedStore)?.nome || '';
   const completed = visitActivities.filter(v => v.completed).length;
@@ -222,7 +221,6 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
 
   return (
     <div className="flex flex-col gap-0">
-      {/* Header visita */}
       <div className={`px-4 py-3 ${phase === 'closed' ? 'bg-emerald-700' : 'bg-amber-500'} text-white`}>
         <div className="flex items-center justify-between">
           <div>
@@ -243,7 +241,6 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
         </div>
       </div>
 
-      {/* Attività per area */}
       {Object.entries(activitiesByArea).map(([area, areaActs]) => (
         <div key={area}>
           <div className="px-4 py-2 bg-slate-100 border-y border-slate-200">
@@ -260,13 +257,13 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
                 onNoteBlur={(n) => saveNote(va.id, n)}
                 onFileUpload={(files) => handlePhotoUpload(va.id, files)}
                 onDeleteAttachment={(attId) => handleDeletePhoto(va.id, attId)}
+                onRatingChange={(r) => updateRating(va.id, r)}
               />
             ))}
           </div>
         </div>
       ))}
 
-      {/* Note generali + allegati file */}
       <div className="p-4 bg-white border-t border-slate-100 flex flex-col gap-4">
         <div>
           <label className="section-title">Note generali visita</label>
@@ -282,7 +279,6 @@ export default function NewVisitPage({ onVisitClosed, onVisitReset }) {
         />
       </div>
 
-      {/* Azioni */}
       <div className="p-4 flex flex-col gap-3 bg-white border-t border-slate-100">
         {phase === 'active' && (
           <button className="btn-primary w-full" onClick={closeVisit} disabled={saving}>
