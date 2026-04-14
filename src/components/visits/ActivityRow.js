@@ -1,8 +1,6 @@
 // src/components/visits/ActivityRow.js
 import { useState, useRef } from 'react';
 
-const AREA_ORDER = ['COMMERCIALE','OBSOLETI','ASSISTENZA','FORMAZIONE','VOLANTINO','PROMOZIONE','AREE ESPOSITIVE','ANALISI PERFORMANCE'];
-
 function StarRating({ value, onChange, readonly }) {
   const [hovered, setHovered] = useState(0);
   const stars = [1, 2, 3, 4, 5];
