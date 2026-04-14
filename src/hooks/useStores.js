@@ -46,7 +46,8 @@ export function useActivities(onlyActive = true) {
     setLoading(true);
     try {
       const data = await fetchWithRetry(() => {
-        let q = supabase.from('activities').select('*').order('ordine');
+        // ORDER BY area, ordine — ordinamento fisso per area e posizione (punto 8)
+        let q = supabase.from('activities').select('*').order('area').order('ordine');
         if (onlyActive) q = q.eq('attiva', true);
         return q;
       });
