@@ -1,10 +1,50 @@
 // src/components/visits/ActivityRow.js
 import { useState, useRef } from 'react';
 
+const AREA_ORDER = ['COMMERCIALE','OBSOLETI','ASSISTENZA','FORMAZIONE','VOLANTINO','PROMOZIONE','AREE ESPOSITIVE','ANALISI PERFORMANCE'];
+
+function StarRating({ value, onChange, readonly }) {
+  const [hovered, setHovered] = useState(0);
+  const stars = [1, 2, 3, 4, 5];
+
+  const getColor = (rating) => {
+    if (!rating) return 'text-slate-300';
+    if (rating <= 2) return 'text-red-500';
+    if (rating === 3) return 'text-amber-400';
+    return 'text-emerald-500';
+  };
+
+  const displayValue = hovered || value || 0;
+  const color = getColor(displayValue);
+
+  return (
+    <div className="flex items-center gap-1">
+      {stars.map(star => (
+        <button
+          key={star}
+          type="button"
+          disabled={readonly}
+          onClick={() => !readonly && onChange(star === value ? null : star)}
+          onMouseEnter={() => !readonly && setHovered(star)}
+          onMouseLeave={() => !readonly && setHovered(0)}
+          className={`text-2xl leading-none transition-colors ${readonly ? 'cursor-default' : 'cursor-pointer active:scale-110'} ${star <= displayValue ? color : 'text-slate-200'}`}
+        >
+          ★
+        </button>
+      ))}
+      {value && (
+        <span className={`text-xs font-semibold ml-1 ${getColor(value)}`}>
+          {value <= 2 ? 'Critico' : value === 3 ? 'Sufficiente' : value === 4 ? 'Buono' : 'Ottimo'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function ActivityRow({
   va, readonly,
   onToggle, onNoteChange, onNoteBlur,
-  onFileUpload, onDeleteAttachment
+  onFileUpload, onDeleteAttachment, onRatingChange
 }) {
   const [expanded, setExpanded] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -19,7 +59,6 @@ export default function ActivityRow({
     e.target.value = '';
   };
 
-  // Supporta incolla screenshot da clipboard (punto 5)
   const handlePaste = async (e) => {
     if (readonly) return;
     const items = e.clipboardData?.items;
@@ -41,9 +80,15 @@ export default function ActivityRow({
 
   const photos = (va.attachments || []).filter(a => a && a.file_type?.startsWith('image/'));
 
+  const ratingColor = (r) => {
+    if (!r) return '';
+    if (r <= 2) return 'text-red-500';
+    if (r === 3) return 'text-amber-400';
+    return 'text-emerald-500';
+  };
+
   return (
     <div className={`bg-white transition-colors ${va.completed ? 'bg-emerald-50/40' : ''}`}>
-      {/* Riga principale */}
       <div className="flex items-center px-4 py-3 gap-3">
         <button
           type="button"
@@ -64,12 +109,14 @@ export default function ActivityRow({
           <p className={`font-medium text-sm leading-snug ${va.completed ? 'text-emerald-700 line-through' : 'text-slate-800'}`}>
             {va.activities?.titolo}
           </p>
-          {va.activities?.descrizione && (
-            <p className="text-xs text-slate-400 mt-0.5 truncate">{va.activities.descrizione}</p>
-          )}
-          <div className="flex gap-1.5 mt-1 flex-wrap">
+          <div className="flex gap-1.5 mt-1 flex-wrap items-center">
             {va.notes && <span className="badge-blue text-[10px]">📝 nota</span>}
             {photos.length > 0 && <span className="badge-blue text-[10px]">📷 {photos.length}</span>}
+            {va.rating && (
+              <span className={`text-xs font-bold ${ratingColor(va.rating)}`}>
+                {'★'.repeat(va.rating)}{'☆'.repeat(5 - va.rating)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -86,8 +133,18 @@ export default function ActivityRow({
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3 border-t border-slate-50">
-          {/* Note — con supporto paste screenshot */}
+          {/* Valutazione stelline */}
           <div className="pt-3">
+            <label className="section-title">Valutazione</label>
+            <StarRating
+              value={va.rating || null}
+              onChange={(v) => onRatingChange && onRatingChange(v)}
+              readonly={readonly}
+            />
+          </div>
+
+          {/* Note con paste screenshot */}
+          <div>
             <label className="section-title">Note</label>
             <textarea
               className="input-field resize-none text-sm"
@@ -104,7 +161,6 @@ export default function ActivityRow({
           {/* Foto */}
           <div>
             <label className="section-title">Foto ({photos.length})</label>
-
             {photos.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {photos.map(att => (
@@ -113,21 +169,18 @@ export default function ActivityRow({
                       <img src={att.file_url} alt={att.file_name}
                         className="w-20 h-20 object-cover rounded-xl border border-slate-200" />
                     </a>
-                    {/* Bottone rimozione sempre visibile su touch — min 44x44px */}
                     {!readonly && (
                       <button
                         type="button"
                         onClick={() => onDeleteAttachment(att.id)}
                         className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full
                           text-sm flex items-center justify-center shadow-md"
-                        style={{ minWidth: 24, minHeight: 24 }}
                       >×</button>
                     )}
                   </div>
                 ))}
               </div>
             )}
-
             {!readonly && (
               <button
                 type="button"
@@ -153,19 +206,7 @@ export default function ActivityRow({
                 )}
               </button>
             )}
-
-            {/*
-              accept="image/*" senza capture — permette sia fotocamera che galleria su mobile.
-              Su Android e iOS viene mostrato il menu di scelta.
-            */}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
           </div>
         </div>
       )}
