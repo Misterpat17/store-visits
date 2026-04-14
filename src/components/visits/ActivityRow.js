@@ -1,5 +1,4 @@
 // src/components/visits/ActivityRow.js
-// Foto multiple per attività, nessun file
 import { useState, useRef } from 'react';
 
 export default function ActivityRow({
@@ -20,13 +19,34 @@ export default function ActivityRow({
     e.target.value = '';
   };
 
-  const photos = (va.attachments || []).filter(a => a.file_type?.startsWith('image/'));
+  // Supporta incolla screenshot da clipboard (punto 5)
+  const handlePaste = async (e) => {
+    if (readonly) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles = [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      setUploading(true);
+      await onFileUpload(imageFiles);
+      setUploading(false);
+    }
+  };
+
+  const photos = (va.attachments || []).filter(a => a && a.file_type?.startsWith('image/'));
 
   return (
     <div className={`bg-white transition-colors ${va.completed ? 'bg-emerald-50/40' : ''}`}>
       {/* Riga principale */}
       <div className="flex items-center px-4 py-3 gap-3">
         <button
+          type="button"
           disabled={readonly}
           onClick={() => onToggle(!va.completed)}
           className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all
@@ -53,7 +73,9 @@ export default function ActivityRow({
           </div>
         </div>
 
-        <button onClick={() => setExpanded(!expanded)}
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
           className="flex-shrink-0 p-1.5 text-slate-400 active:text-slate-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
@@ -62,19 +84,19 @@ export default function ActivityRow({
         </button>
       </div>
 
-      {/* Sezione espansa */}
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3 border-t border-slate-50">
-          {/* Note */}
+          {/* Note — con supporto paste screenshot */}
           <div className="pt-3">
             <label className="section-title">Note</label>
             <textarea
               className="input-field resize-none text-sm"
               rows={2}
-              placeholder="Aggiungi una nota per questa attività..."
+              placeholder="Aggiungi una nota... (puoi incollare screenshot con Ctrl+V)"
               value={va.notes || ''}
               onChange={e => onNoteChange(e.target.value)}
               onBlur={e => onNoteBlur(e.target.value)}
+              onPaste={handlePaste}
               disabled={readonly}
             />
           </div>
@@ -86,17 +108,19 @@ export default function ActivityRow({
             {photos.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {photos.map(att => (
-                  <div key={att.id} className="relative group">
+                  <div key={att.id} className="relative">
                     <a href={att.file_url} target="_blank" rel="noopener noreferrer">
                       <img src={att.file_url} alt={att.file_name}
                         className="w-20 h-20 object-cover rounded-xl border border-slate-200" />
                     </a>
+                    {/* Bottone rimozione sempre visibile su touch — min 44x44px */}
                     {!readonly && (
                       <button
+                        type="button"
                         onClick={() => onDeleteAttachment(att.id)}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full
-                          text-xs flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100
-                          active:opacity-100 transition-opacity"
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full
+                          text-sm flex items-center justify-center shadow-md"
+                        style={{ minWidth: 24, minHeight: 24 }}
                       >×</button>
                     )}
                   </div>
@@ -106,6 +130,7 @@ export default function ActivityRow({
 
             {!readonly && (
               <button
+                type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 className="flex items-center gap-2 text-blue-600 text-sm font-medium
@@ -129,13 +154,15 @@ export default function ActivityRow({
               </button>
             )}
 
-            {/* Solo immagini, multiple */}
+            {/*
+              accept="image/*" senza capture — permette sia fotocamera che galleria su mobile.
+              Su Android e iOS viene mostrato il menu di scelta.
+            */}
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
               multiple
-              capture="environment"
               className="hidden"
               onChange={handleFileChange}
             />
