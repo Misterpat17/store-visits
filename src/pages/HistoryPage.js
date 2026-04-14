@@ -100,6 +100,20 @@ export default function HistoryPage({ onVisitClosed }) {
     fetchVisits();
   };
 
+  // Punto 7: riapertura visita conclusa
+  const reopenVisit = async (visitId) => {
+    if (!window.confirm('Riaprire questa visita? Tornerà in stato "In corso" e potrai modificarla.')) return;
+    const { error } = await supabase
+      .from('visits')
+      .update({ end_time: null })
+      .eq('id', visitId);
+    if (error) {
+      alert('Errore nella riapertura: ' + error.message);
+      return;
+    }
+    fetchVisits();
+  };
+
   const handleVisitClosedFromModal = () => {
     setResumeVisit(null);
     fetchVisits();
@@ -213,20 +227,41 @@ export default function HistoryPage({ onVisitClosed }) {
 
               <div className="flex gap-1 flex-shrink-0">
                 {activeTab === 'completate' && (
-                  <button onClick={() => softDelete(v.id)}
-                    className="p-2 text-slate-400 active:text-red-500">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
-                    </svg>
-                  </button>
+                  <>
+                    {/* Punto 7: bottone Riapri — visibile a tutti per le proprie visite, admin per tutte */}
+                    {(isAdmin || v.user_id === user?.id) && (
+                      <button
+                        type="button"
+                        onClick={() => reopenVisit(v.id)}
+                        className="p-2 text-slate-400 active:text-amber-600"
+                        title="Riapri visita">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => softDelete(v.id)}
+                      className="p-2 text-slate-400 active:text-red-500"
+                      title="Sposta nel cestino">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
+                      </svg>
+                    </button>
+                  </>
                 )}
                 {activeTab === 'in-corso' && (
                   <>
-                    <button onClick={() => setResumeVisit(v)}
+                    <button
+                      type="button"
+                      onClick={() => setResumeVisit(v)}
                       className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-xl text-xs font-semibold active:bg-amber-200">
                       Riprendi
                     </button>
-                    <button onClick={() => softDelete(v.id)}
+                    <button
+                      type="button"
+                      onClick={() => softDelete(v.id)}
                       className="p-2 text-slate-400 active:text-red-500">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/><path d="M9,6V4h6v2"/>
@@ -236,14 +271,18 @@ export default function HistoryPage({ onVisitClosed }) {
                 )}
                 {activeTab === 'cestino' && (
                   <>
-                    <button onClick={() => restore(v.id)}
+                    <button
+                      type="button"
+                      onClick={() => restore(v.id)}
                       className="p-2 text-slate-400 active:text-emerald-600">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
                       </svg>
                     </button>
                     {isAdmin && (
-                      <button onClick={() => hardDelete(v.id)}
+                      <button
+                        type="button"
+                        onClick={() => hardDelete(v.id)}
                         className="p-2 text-red-400 active:text-red-600">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/>
